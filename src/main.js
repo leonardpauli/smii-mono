@@ -17,11 +17,6 @@ const {action_list} = require('./action_list.js')
 const {config} = require('../config.js')
 
 
-// curl 0.0.0.0:3000/api -X POST -w '\n\n%{http_code}\n' -d'{"action":"neo4j_add1","payload":{"n":3}}' # expected: ... 4
-// curl 0.0.0.0:3000/api -X POST -w '\n\n%{http_code}\n' -d'{"action":"server_heartbeat"}' # expected: {"date": (iso string)}
-// curl 0.0.0.0:3000/api -X POST -d'{"action":"channel.title | search.fuzzy","payload":{"q":"mrbeas"}}'
-
-
 const main = {
 	async init () {
 
