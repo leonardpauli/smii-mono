@@ -44,12 +44,37 @@ const action_list = [{
 		return collect(x {.title, .id, .slug, .image_default, .view_count, .country}) as list
 	`,
 }, {
-	title: 'subcount',
+	title: 'channels by slug or id with 10 latest videos excerpt ignoring missing',
 	type: 'neo4j_query',
 	param_get: (ctx)=> ({xs: ctx.payload.xs}),
+	// with [
+	// 	{slug: 'beneater'},
+	// 	{id: "UCCuK8BtBE41vZeoXYAoaFaQ"},
+	// 	{id: 'UCXuqSBlHAE6Xw-yeJA0Tunw'},
+	// 	{id: "UCH1Jp-23gV7jpHyB6vx7XwA"},
+	// 	{slug: 'eaterbca'}
+	// ] as xs
 	extractor: (ctx, res)=> res,
 	query: `
-		// unwind $xs as x // WIP
+		unwind $xs as x
+		optional match (c_id:Channel {id: x.id})
+		optional match (c_slug:Channel {slug: x.slug})
+		with collect(c_id)+collect(c_slug) as c_match
+		unwind c_match as channel
+		call apoc.cypher.run("
+		with $channel as channel
+		match (channel)-[:has_uploads]->(:Playlist)-[:has_video]->(v:Video)
+		with channel, v
+		order by v.publishedAt desc limit 10
+		return channel, v as video
+		", {channel: channel}) yield value
+		return
+			// channel {.id, .title, .subscriber_count, .view_count},
+			value.channel.title as channel_title,
+			value.channel.subscriber_count as subscriber_count,
+			value.channel.view_count as view_count, // warn: not yet video view count
+			value.video.id as video_id,
+			tostring(value.video.publishedAt) as published_at
 	`,
 }, {
 	title: 'viz.data.gen: Top 1000 channels (by view_count) with self-declared keyword x',
