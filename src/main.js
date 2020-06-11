@@ -13,9 +13,8 @@ const {yt_api} = require('./yt_api.js')
 
 const {config} = require('../config.js')
 
-const yt_channel_id_linustechtips = 'UCXuqSBlHAE6Xw-yeJA0Tunw'
-const yt_channel_username_beneater = 'eaterbc'
-
+const {tmp_scripts} = require('./tmp_scripts.js')
+const raw_templates = require('./raw_templates.js')
 
 
 const main = {
@@ -30,7 +29,7 @@ const main = {
 
 		const tmp_scripts_run = true
 		if (tmp_scripts_run) {
-			await this.tmp_scripts()
+			await tmp_scripts.call(this)
 			this.exit()
 			return
 		}
@@ -82,10 +81,10 @@ const main = {
 				return value.count as count, count_all
 			`, {size, i})
 			const {count, count_all} = res[0]
-			const done = count_all==0
+			const done = count_all<size
 			dlog.time({
 				at: 'batch.done', i, count, count_all,
-				progress: done?1:(i*size + count_all)/total,
+				progress: (i*size + count_all)/total,
 			})
 			if (done) break;
 			i++
@@ -152,7 +151,7 @@ const main = {
 			rest: {},
 		}
 		obj_extract({
-			template: channel_raw_template,
+			template: raw_templates.channel,
 			source: raw,
 			ctx: {obj},
 			rest_target: obj.left = {},
@@ -162,11 +161,7 @@ const main = {
 
 		/*
 		TODO:
-		- publishedAt -> published_at
-			match (v:Video) set v.published_at = v.publishedAt
-		- videoCount -> post_count
 		- :Video -> :Video:Post
-		- fetchedAt -> fetched_at
 		- clean hiddenSubscriberCount / subscriber_count=0 -> null
 		- (:Channel)-[:has_post]->(:Post)
 		- what if same slug but different id?
@@ -174,140 +169,8 @@ const main = {
 		*/
 	
 	},
-
-
-	async tmp_scripts () {
-
-		false && await this.neo4j_batch_process_all_nodes({
-			node_label: 'Video',
-			size: 100_000,
-			query: `
-			where v.published_at is null
-			set v.published_at = v.publishedAt
-			`
-		})
-		
-		/* // apoc refactor slower then my batch processing?
-		dlog.time('start')
-		await this.neo4j_request_and_log(`
-			match (v:Video) with v limit 100000 with collect(v) as vs
-			call apoc.refactor.rename.nodeProperty('publishedAt', 'published_at2', vs) yield committedOperations
-			return committedOperations
-		`)
-		dlog.time('done')
-		*/
-
-		false && await this.neo4j_batch_process_all_nodes({
-			node_label: 'Video',
-			size: 100_000,
-			query: `
-			where v.published_at is not null
-			remove v.publishedAt
-			`
-		})
-
-
-		if (false) {
-			const d = await yt_api.channel_by_username({
-				username: yt_channel_username_beneater,
-			})
-			// const d = await yt_api.channels_by_ids({
-			// 	ids: [yt_channel_id_linustechtips],
-			// })
-			console.dir(d, {depth: 7})
-			
-		}
-
-		false && await this.batch_fetch_import_channels([
-			{slug: yt_channel_username_beneater},
-		])
-	}
 }
 
-
-const v_use_empty = false
-const v = path=> (v, ctx)=> {
-	const is_empty = v==='' || v===undefined || v===null
-	if (!v_use_empty && is_empty) return
-	ctx.obj[path] = is_empty? null: v
-}
-const v_rest = path=> (v, ctx)=> {
-	const is_empty = v==='' || v===undefined || v===null
-	if (!v_use_empty && is_empty) return
-	ctx.obj.rest[path] = is_empty? null: v
-}
-
-const v_keywords = path=> (v, ctx)=> {}
-
-
-const channel_raw_template = {
-	kind: noop,
-	// etag: v_rest('yt_etag'),
-	id: v('id'),
-	snippet: {
-		title: v_rest('title'),
-		description: v('description'),
-		customUrl: v('slug'),
-		publishedAt: v('published_at'),
-		thumbnails: Object.fromEntries('default,medium,high'.split(',').map(k=> [k, {
-			// template: width, height // 88, 240, 800
-			url: v_rest(`image_${k}`),
-			width: noop,
-			height: noop,
-		}])),
-		localized: noop || {
-			title: noop,
-			description: noop,
-		},
-		country: v('country'), // empty or eg. 'CA'
-	},
-	contentDetails: {
-		relatedPlaylists: {
-			uploads: v('uploads_playlist_id'), // playlist_id
-			likes: v('likes_playlist_id'), // '' or playlist_id
-			favorites: v('favorites_playlist_id'), // '' or playlist_id
-			watchHistory: noop, // 'HL',
-			watchLater: noop, // 'WL',
-		},
-	},
-	statistics: {
-		viewCount: v('view_count'), // string (import as full neo4j int)
-		commentCount: a=> v('comment_count')(a==='0'?null:a),
-		subscriberCount: v('subscriber_count'), // null if hiddenSubscriberCount===true
-		hiddenSubscriberCount: v('subscriber_count_hidden'), // boolean
-		videoCount: v('post_count'),
-	},
-	brandingSettings: {
-		channel: {
-			title: noop,
-			description: noop,
-			keywords: v_keywords('keywords'), // empty or space-separated (beware of quotes, see existing parsing)
-			defaultTab: noop, // 'Featured',
-      // showRelatedChannels: true,
-      showBrowseView: noop, // true,
-		},
-		image: {
-			bannerImageUrl: noop,
-
-			bannerTabletLowImageUrl: noop,
-			bannerTabletImageUrl: noop,
-			bannerTabletHdImageUrl: noop,
-			bannerTabletExtraHdImageUrl: v_rest('image_banner_default'),
-
-			bannerMobileImageUrl: noop,
-			bannerMobileLowImageUrl: noop,
-			bannerMobileMediumHdImageUrl: noop,
-			bannerMobileHdImageUrl: noop,
-			bannerMobileExtraHdImageUrl: noop,
-
-			bannerTvImageUrl: noop,
-			bannerTvLowImageUrl: noop,
-			bannerTvMediumImageUrl: noop,
-			bannerTvHighImageUrl: v_rest('image_banner_high'),
-		},
-		hints: noop, // meta data/additional kv fields?
-	},
-}
 
 
 // start
