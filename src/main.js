@@ -27,33 +27,70 @@ const main = {
 		config.youtube.key = config.youtube.key_list[0]
 		await yt_api.init(config.youtube)
 
+
+		const tmp_scripts_run = true
+		if (tmp_scripts_run) {
+			await this.tmp_scripts()
+			this.exit()
+			return
+		}
+
+
 		deinit.add(()=> {
 			dlog('queue.poll.deinit')
 			this.queue_poll_stop()
 		})
 		this.queue_poll_start()
 
-		// const res_raw = await execute_to_objects(this.session, query, param)
-
-
-
-		// const d = await yt_api.channel_by_username({
-		// 	username: yt_channel_username_beneater,
-		// })
-		// const d = await yt_api.channels_by_ids({
-		// 	ids: [yt_channel_id_linustechtips],
-		// })
-		// console.dir(d, {depth: 7})
-		
-		await this.batch_fetch_import_channels([
-			{slug: yt_channel_username_beneater},
-		])
-
-		this.exit()
-
 	},
 	exit () { // not in use?
 		deinit.exit()
+	},
+
+	neo4j_request (query, params = {}) {
+		return neo4j_utils.execute_to_objects(this.session, query, params)
+	},
+
+	async neo4j_request_and_log (query, params = {}) {
+		const res = await neo4j_utils.execute_to_objects(this.session, query, params)
+		console.dir(res, {depth: 5})
+	},
+
+	async neo4j_batch_process_all_nodes ({
+		node_label,
+		i: i_start = 0,
+		size = 10000,
+		query, // eg. where v.published_at is null set v.published_at = v.publishedAt
+	}) {
+		let i = i_start
+		
+		const res = await this.neo4j_request(`match (v:${node_label}) return count(v) as count`)
+		const total = res[0].count
+		dlog.time({at: 'batch.start', node_label, total})
+
+		while (true) {
+			const res = await this.neo4j_request(`
+				match (v:${node_label}) with v
+				skip tointeger($i*$size) limit tointeger($size)
+				with collect(v) as vs, count(v) as count_all
+				call apoc.cypher.doIt("
+					unwind $vs as v
+					with v
+					${query}
+					return count(v) as count
+				", {vs: vs}) yield value
+				return value.count as count, count_all
+			`, {size, i})
+			const {count, count_all} = res[0]
+			const done = count_all==0
+			dlog.time({
+				at: 'batch.done', i, count, count_all,
+				progress: done?1:(i*size + count_all)/total,
+			})
+			if (done) break;
+			i++
+		}
+		return i
 	},
 
 	queue_poll_delay: 1000,
@@ -126,16 +163,65 @@ const main = {
 		/*
 		TODO:
 		- publishedAt -> published_at
+			match (v:Video) set v.published_at = v.publishedAt
 		- videoCount -> post_count
 		- :Video -> :Video:Post
 		- fetchedAt -> fetched_at
 		- clean hiddenSubscriberCount / subscriber_count=0 -> null
+		- (:Channel)-[:has_post]->(:Post)
 		- what if same slug but different id?
 		- v_keywords
-		- obj_extract
 		*/
 	
 	},
+
+
+	async tmp_scripts () {
+
+		false && await this.neo4j_batch_process_all_nodes({
+			node_label: 'Video',
+			size: 100_000,
+			query: `
+			where v.published_at is null
+			set v.published_at = v.publishedAt
+			`
+		})
+		
+		/* // apoc refactor slower then my batch processing?
+		dlog.time('start')
+		await this.neo4j_request_and_log(`
+			match (v:Video) with v limit 100000 with collect(v) as vs
+			call apoc.refactor.rename.nodeProperty('publishedAt', 'published_at2', vs) yield committedOperations
+			return committedOperations
+		`)
+		dlog.time('done')
+		*/
+
+		false && await this.neo4j_batch_process_all_nodes({
+			node_label: 'Video',
+			size: 100_000,
+			query: `
+			where v.published_at is not null
+			remove v.publishedAt
+			`
+		})
+
+
+		if (false) {
+			const d = await yt_api.channel_by_username({
+				username: yt_channel_username_beneater,
+			})
+			// const d = await yt_api.channels_by_ids({
+			// 	ids: [yt_channel_id_linustechtips],
+			// })
+			console.dir(d, {depth: 7})
+			
+		}
+
+		false && await this.batch_fetch_import_channels([
+			{slug: yt_channel_username_beneater},
+		])
+	}
 }
 
 
