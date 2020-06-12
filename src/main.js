@@ -184,7 +184,7 @@ const main = {
 		await this.fetch_import_channel(xs[0])
 	},
 
-	async fetch_import_channel ({id, slug}) {
+	async fetch_import_channel ({id, slug}, ctx) {
 		if (id) {
 			const res = await yt_api.channels_by_ids({
 				ids: [id],
@@ -193,7 +193,7 @@ const main = {
 				throw new Error(`!res.data.items.length ${id}`)
 			const d_raw = res.data.items[0]
 
-			await this.import_channel(d_raw, {fetched_at: res.date})
+			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else if (slug) {
 			const res = await yt_api.channel_by_username({
 				username: slug,
@@ -202,11 +202,11 @@ const main = {
 				throw new Error(`!res.data.items.length ${slug}`)
 			const d_raw = res.data.items[0]
 
-			await this.import_channel(d_raw, {fetched_at: res.date})
+			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else throw new Error(`no id or slug`)
 	},
 
-	async import_channel (raw, {fetched_at}) {
+	async import_channel (raw, {ctx, fetched_at}) {
 
 		const obj = {
 			fetched_at: fetched_at.toISOString(),
@@ -224,15 +224,27 @@ const main = {
 		}
 		console.dir(obj, {depth: 4})
 
-		await this.neo4j_request_and_log(queries.channel_import, {channel_raw: obj})
+		if (!ctx.q_id) {
+			await this.neo4j_request_and_log(`
+				with $channel_raw as channel_raw
+				${queries.channel_import()}
+				return n.title
+			`, {channel_raw: obj})
+		} else {
+			await this.neo4j_request_and_log(`
+				with $p_id as p_id, $xs as xs
+				${queries.channel_import_queued_mark_done()}
+				return 1
+			`, {
+				p_id: ctx.p_id,
+				xs: [{channel: obj, q_id: ctx.q_id}],
+			})
+		}
+
 
 		/*
 		TODO:
-		- what if same slug but different id? -> changed constraint to be on :Channel_yt (+ :Channel_ig later)
-		- remove keyword nodes -> -[:has_keywords]->(:Text {text: it}) // done
-		--
 		- write update/import channel query + test it
-			- clean hiddenSubscriberCount / subscriber_count=0 -> null
 		- add lib file for queue queries?
 		- use lib for queue (+ make it automatic)
 		- add lib (shared somehow?) to api

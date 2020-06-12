@@ -2,6 +2,8 @@ const {yt_api} = require('./yt_api.js')
 const {dlog} = require('@leonardpauli/utils/src/log.js')
 const {queries, example_channel_raw} = require('./queries.js')
 
+const {config} = require('../config.js')
+
 const yt_channel_id_linustechtips = 'UCXuqSBlHAE6Xw-yeJA0Tunw'
 const yt_channel_username_beneater = 'eaterbc'
 
@@ -18,6 +20,7 @@ async function tmp_scripts () {
 	setup_constraints && await unique_prop('video_id_unique', 'Video', 'n.id')
 	setup_constraints && await unique_prop('country_yt_code', 'Country', 'n.yt_code')
 	// setup_constraints && await unique_prop('keyword_title_unique', 'Keyword', 'n.title')
+	setup_constraints && await unique_prop('processor_id_unique', 'Processor', 'n.id')
 
 
 	false && await this.neo4j_batch_process_all_nodes({
@@ -163,7 +166,17 @@ async function tmp_scripts () {
 	}
 
 	false && await this.neo4j_request_and_log(queries.xPlus1, {x: 4})
-	true && await this.neo4j_request_and_log('with $channel_raw as channel_raw\n'+queries.channel_import, {channel_raw: example_channel_raw})
+	false && await this.neo4j_request_and_log(`
+		with $channel_raw as channel_raw
+		${queries.channel_import()}
+		return n.title
+	`, {channel_raw: example_channel_raw})
+
+
+	true && await this.neo4j_request_and_log(
+		queries['register/ensure processor + mark as started']({p_id: '$p_id'}), {
+			p_id: config.processor_id,
+		})
 
 	false && await this.batch_fetch_import_channels([
 		// {slug: yt_channel_username_beneater},

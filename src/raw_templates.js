@@ -18,7 +18,6 @@ const v_rest = path=> (v, ctx)=> {
 
 const v_keywords = path=> (_v, ctx)=> {
 	const res = keyword_extract(_v)
-	console.log({_v, res})
 	v(path)(res, ctx)
 }
 

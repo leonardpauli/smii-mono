@@ -9,6 +9,7 @@ const config = {
 		user: process.env.neo4j_user,
 		pass: process.env.neo4j_pass,
 	},
+	processor_id: process.env.processor_id,
 }
 
 module.exports = {config}
