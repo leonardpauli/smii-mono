@@ -4,18 +4,45 @@ const {
 
 
 const v_use_empty = false
+const is_empty = v=> v==='' || v===undefined || v===null || (Array.isArray(v) && v.length===0)
 const v = path=> (v, ctx)=> {
-	const is_empty = v==='' || v===undefined || v===null
-	if (!v_use_empty && is_empty) return
-	ctx.obj[path] = is_empty? null: v
+	const _is_empty = is_empty(v)
+	if (!v_use_empty && _is_empty) return
+	ctx.obj[path] = _is_empty? null: v
 }
 const v_rest = path=> (v, ctx)=> {
-	const is_empty = v==='' || v===undefined || v===null
-	if (!v_use_empty && is_empty) return
-	ctx.obj.rest[path] = is_empty? null: v
+	const _is_empty = is_empty(v)
+	if (!v_use_empty && _is_empty) return
+	ctx.obj.rest[path] = _is_empty? null: v
 }
 
-const v_keywords = path=> (v, ctx)=> {}
+const v_keywords = path=> (_v, ctx)=> {
+	const res = keyword_extract(_v)
+	console.log({_v, res})
+	v(path)(res, ctx)
+}
+
+// str1 = 'some "hello" key "keyword" "space sepa rated" some "with, \\" sisi" maybe, even, comma'
+// str2 = '"hello" key "keyword" "space sepa rated" some "with, \\" sisi" maybe, even, comma some'
+// TODO: better handling of different quotes?
+const keyword_extract_regex = /("|“)(([^"”\\]|\\"|\\”|\\)*)("|”)|([^"“ ]+)/g
+
+const keyword_extract = s=> {
+	if (is_empty(s)) return []
+	const list = []
+	let match = null
+	while ((match = keyword_extract_regex.exec(s)) !== null) {
+		const quoted = match[2]
+		const nonquoted = match[5]
+		if (quoted!==undefined) {
+			list.push(quoted)
+		} else if (nonquoted!==undefined) {
+			list.push((nonquoted||'').replace(/,$/, ''))
+		}
+	}
+	return list.filter(Boolean).map(a=> a.toLowerCase().replace(/“|”/g, ''))
+}
+// ;[keyword_extract(str1), keyword_extract(str2)]
 
 
 const channel = {
