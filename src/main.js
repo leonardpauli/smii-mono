@@ -16,6 +16,7 @@ const {config} = require('../config.js')
 
 const {tmp_scripts} = require('./tmp_scripts.js')
 const raw_templates = require('./raw_templates.js')
+const {queries} = require('./queries.js')
 
 
 const main = {
@@ -208,7 +209,7 @@ const main = {
 	async import_channel (raw, {fetched_at}) {
 
 		const obj = {
-			fetched_at,
+			fetched_at: fetched_at.toISOString(),
 			rest: {},
 		}
 		obj_extract({
@@ -223,11 +224,12 @@ const main = {
 		}
 		console.dir(obj, {depth: 4})
 
+		await this.neo4j_request_and_log(queries.channel_import, {channel_raw: obj})
+
 		/*
 		TODO:
 		- what if same slug but different id? -> changed constraint to be on :Channel_yt (+ :Channel_ig later)
 		- remove keyword nodes -> -[:has_keywords]->(:Text {text: it}) // done
-		- v_keywords // done
 		--
 		- write update/import channel query + test it
 			- clean hiddenSubscriberCount / subscriber_count=0 -> null
