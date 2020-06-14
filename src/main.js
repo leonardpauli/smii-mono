@@ -50,10 +50,14 @@ const main = {
 
 	neo4j_request (query, params = {}) {
 		return neo4j_utils.execute_to_objects(this.session, query, params)
+			.catch(error=> {
+				console.dir({at: 'neo4j_request.error', query, error})
+				return Promise.reject(error)
+			})
 	},
 
 	async neo4j_request_and_log (query, params = {}) {
-		const res = await neo4j_utils.execute_to_objects(this.session, query, params)
+		const res = await this.neo4j_request(query, params)
 		console.dir(res, {depth: 5})
 	},
 
@@ -178,10 +182,14 @@ const main = {
 		}
 	},
 
-	async batch_fetch_import_channels (xs) {
-		if (xs.length!==1) throw new Error(`TODO: batch import by combining ids fetch (yt_api.channels_by_ids)`)
+	async batch_fetch_import_channels (xs, {p_id} = {}) {
+		// TODO: batch import by combining ids fetch (yt_api.channels_by_ids)
 
-		await this.fetch_import_channel(xs[0])
+		for (const x of xs) {
+			console.dir({at: 'batch_fetch_import_channels.entry', x})
+			await this.fetch_import_channel(x.channel, {q_id: x.q_id, p_id})
+		}
+
 	},
 
 	async fetch_import_channel ({id, slug}, ctx) {
@@ -212,17 +220,22 @@ const main = {
 			fetched_at: fetched_at.toISOString(),
 			rest: {},
 		}
-		obj_extract({
-			template: raw_templates.channel,
-			source: raw,
-			ctx: {obj},
-			rest_target: obj.left = {},
-		})
-		obj.left = JSON.stringify(obj.left)
-		if (obj.keywords) {
-			obj.keywords = obj.keywords.map(v=> v.replace(/\t/g, ' ')).join('\t')
+		try {
+			obj_extract({
+				template: raw_templates.channel,
+				source: raw,
+				ctx: {obj},
+				rest_target: obj.left = {},
+			})
+			obj.left = JSON.stringify(obj.left)
+			if (obj.keywords) {
+				obj.keywords = obj.keywords.map(v=> v.replace(/\t/g, ' ')).join('\t')
+			}
+			console.dir(obj, {depth: 4})
+		} catch (e) {
+			console.dir({at: 'import_channel', raw, ctx})
+			throw e
 		}
-		console.dir(obj, {depth: 4})
 
 		if (!ctx.q_id) {
 			await this.neo4j_request_and_log(`
@@ -244,9 +257,15 @@ const main = {
 
 		/*
 		TODO:
-		- write update/import channel query + test it
-		- add lib file for queue queries?
-		- use lib for queue (+ make it automatic)
+		// "done senario" seems to be working properly
+		- use lib for queue
+			- processor start
+			- queue add channel
+			- queue take channel
+			- failure senarios
+			- done senario
+			- reset stalling + inspect logic
+		- make it automatic
 		- add lib (shared somehow?) to api
 		- add vue starter base
 		- create + deploy simple queue table viewer

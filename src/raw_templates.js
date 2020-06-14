@@ -76,7 +76,7 @@ const channel = {
 	},
 	statistics: {
 		viewCount: v('view_count'), // string (import as full neo4j int)
-		commentCount: a=> v('comment_count')(a==='0'?null:a),
+		// commentCount: noop, // a=> v('comment_count')(a==='0'?null:a),
 		subscriberCount: v('subscriber_count'), // null if hiddenSubscriberCount===true
 		hiddenSubscriberCount: v('subscriber_count_hidden'), // boolean
 		videoCount: v('post_count'),
@@ -89,6 +89,7 @@ const channel = {
 			defaultTab: noop, // 'Featured',
       // showRelatedChannels: true,
       showBrowseView: noop, // true,
+      featuredChannelsUrls: (_v, ctx)=> v('featured_channel_ids')(Array.isArray(_v)?_v:[], ctx),
 		},
 		image: {
 			bannerImageUrl: noop,

@@ -1,3 +1,27 @@
+/*
+legend:
+  Processor
+    id
+  Queued
+    id is Empty or Id // set when status is changed first time?
+    created_at is Date
+    priority is Float
+      // default: 1; higher is higher priority, eg. should be taken before lower priority
+    status is Enum(Empty, 'taken', 'failed', 'done')
+    modified_at is Empty or Date
+
+  Log
+    at is String
+    created_at
+
+  Channel_yt is Channel
+    id
+  Text
+    text is String
+
+ */
+
+
 
 const example_channel_raw = {
   id: 'UCXuqSBlHAE6Xw-yeJA0Tunw',
@@ -29,6 +53,9 @@ const example_channel_raw = {
   
   uploads_playlist_id: 'UUXuqSBlHAE6Xw-yeJA0Tunw',
   favorites_playlist_id: 'FLXuqSBlHAE6Xw-yeJA0Tunw',
+  likes_playlist_id: 'FLXuqSBlHAE6Xw-yeJA0Tuns', // mostly not used, better but in .left?
+
+  featured_channel_ids: ['UCXuqSBlHAE6Xw-yeJA0Tunt', 'UCXuqSBlHAE6Xw-yeJA0Tunk'],
 }
 
 const _text_node_replace = ({type, content})=> `
@@ -97,6 +124,18 @@ foreach(dummy in case when channel_raw.favorites_playlist_id is not null then [1
   merge (p:Playlist {id: channel_raw.favorites_playlist_id})
   merge (n)-[:has_favorites]->(p)
 )
+
+foreach(dummy in case when channel_raw.likes_playlist_id is not null then [1] else [] end |
+  merge (p:Playlist {id: channel_raw.likes_playlist_id})
+  merge (n)-[:has_likes]->(p)
+)
+
+foreach(fc_id in channel_raw.featured_channel_ids |
+  merge (fc:Channel:Channel_yt {id: fc_id})
+  merge (n)-[:has_featured_channel]->(fc)
+)
+
+with n, channel_raw ${with_add}
 `;
 
 
@@ -124,10 +163,10 @@ const queries = {
   channel_import_queued_mark_done,
 
 
-['queue rand 10 unqueued channels for fetch']:
-// match ()-[:has_featured_channel]->(c:Channel)
+['queue add rand 10 unqueued channels for fetch']:
+// match ()-[:has_featured_channel]->(c:Channel_yt)
 `
-  match (c:Channel)
+  match (c:Channel_yt)
   where c.fetchedAt is null
   and not (c)<-[:has_node]-(:Queued)
   with c order by rand() limit 10 // return c
@@ -135,37 +174,59 @@ const queries = {
 `,
 
 
-['queue 10 unqueued channels for fetch (ordered by featured by channel size)']:
+['queue add unqueued channels for fetch (ordered by featured by channel size)']: ({count = '10'} = {})=>
 `
-  match (c:Channel)
+  match (c:Channel_yt)
   where c.subscriber_count is not null
   with c order by c.subscriber_count desc // limit 1000 or add some rnd filter to make faster
-  match (c)-[:has_featured_channel]->(fc:Channel)
-  where fc.fetchedAt is null
+  match (c)-[:has_featured_channel]->(fc:Channel_yt)
+  where fc.fetched_at is null
   and not (fc)<-[]-(:Queued)
-  with fc, c order by c.subscriber_count desc limit 10
+  with fc, c order by c.subscriber_count desc limit ${count}
   merge (fc)<-[:has_node]-(q:Queued {created_at: datetime(), priority: 1.0})
-  // return c.subscriber_count, c.title, collect(fc)
+  return c.subscriber_count, c.title, collect(fc.id)
 `,
 
 
-['inspect queue with logs']:
+['queue channels by id once']: ({xs, priority = 1.0})=>
 `
-  match (q:Queued)-[:has_node]->(c:Channel)
+  unwind ${xs} as x
+  merge (c:Channel:Channel_yt {id: x})
+  with c
+  optional match (c)<-[:has_node]-(pq:Queued)
+  where pq.status is null or pq.status = 'taken'
+  with c, count(pq) as pqc
+
+  // TODO: if exists, mod earliest.priority = max(earliest.priority, priority)?
+
+  foreach(dummy in case when pqc = 0 then [1] else [] end |
+    merge (c)<-[:has_node]-(q:Queued {created_at: datetime(), priority: ${priority}})
+  )
+
+  return count(c) as count, pqc as existing_queued_entries_count
+`,
+
+
+['queue inspect with logs']:
+`
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
   with q, c
   optional match (q)<-[:has_node]-(l:Log)
   with q, c, l
   order by q.priority desc, q.created_at asc
-  return q, c as channel, collect(l) as logs
+  return
+    tostring(coalesce(q.modified_at, q.created_at)) as updated_at,
+    q {.priority, .status},
+    c {.id, .title, fetched_at: tostring(c.fetched_at)} as channel,
+    collect(l {.at}) as logs
 `,
 
 
-['inspect queue stalling']:
+['queue inspect stalling']: ({dur_str = '"PT1H"'})=>
 // https://neo4j.com/docs/cypher-manual/current/functions/temporal/duration/
-// with "PT1H" as dur_str
 `
-  match (q:Queued)-[:has_node]->(c:Channel)
-  where q.status is not null and q.modified_at < datetime() - duration(dur_str)
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
+  where q.status is not null and q.modified_at < datetime() - duration(${dur_str})
   with q, c
   order by q.priority desc, q.created_at asc
   optional match (q)<-[:has_node]-(p:Processor)
@@ -173,12 +234,10 @@ const queries = {
 `,
 
 
-['reset stalling "taken"']:
-// with "PT1H" as dur_str
-// with "PT3S" as dur_str
+['queue reset stalling "taken"']: ({dur_str = '"PT1H"'})=>
 `
-  match (q:Queued)-[:has_node]->(c:Channel)
-  where q.status = "taken" and q.modified_at < datetime() - duration(dur_str)
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
+  where q.status = "taken" and q.modified_at < datetime() - duration(${dur_str})
   set q.status = null, q.modified_at = datetime()
   with q
   optional match (q)<-[r:has_node]-(p:Processor)
@@ -187,11 +246,20 @@ const queries = {
 `,
 
 
-['reset "failed"']:
+['queue remove awaiting']:
+`
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
+  where q.status is null
+  detach delete q
+  return count(q) as count
+`,
+
+
+['queue reset "failed"']:
 // with "PT1H" as dur_str
 // with "PT3S" as dur_str
 `
-  match (q:Queued)-[:has_node]->(c:Channel)
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
   where q.status = "failed" and q.modified_at < datetime() - duration(dur_str)
   set q.status = null, q.modified_at = datetime()
   with q
@@ -201,7 +269,7 @@ const queries = {
 `,
 
 
-['register/ensure processor + mark as started']: ({p_id})=>
+['processor register/ensure and mark as started']: ({p_id})=>
 // ' .env
 //  processor_id_file=.env.processor_id
 //  [ ! -f "$processor_id_file" ] && openssl rand -base64 32 > "$processor_id_file"
@@ -218,28 +286,29 @@ const queries = {
 `,
 
 
-['take from queue']:
+['queue take awaiting']: ({p_id, count})=>
 // await assert_unique('queued_id_unique', 'Queued', 'n.id')
 // assumes processor already registered
 // with "..." as p_id
 `
-  match (p:Processor {id: p_id})
+  match (p:Processor {id: ${p_id}})
   with p
-  match (q:Queued)-[:has_node]->(c:Channel)
+  match (q:Queued)-[:has_node]->(c:Channel_yt)
   where q.status is null
   with p, q, c
   order by q.priority desc, q.created_at asc
-  limit 2
+  limit ${count}
   set
     q.status = 'taken',
     q.modified_at = datetime(),
     q.id = coalesce(q.id, apoc.create.uuid())
   merge (p)-[:has_node]->(q)
-  return q.id as q_id, c as channel
+  return q.id as q_id, c {.id, .slug} as channel
+  // TODO: possibly also return .left.etag?
 `,
 
 
-['add failing log message']:
+['log message failing']:
 // warn: "(q)<-[r:has_node]-(p:Processor)", r is not deleted to aid failure debugging
 // with
 //  {at: "yt_fetch", text: "some err"} as log_obj,
@@ -258,7 +327,7 @@ const queries = {
 `,
 
 
-['mark queued as success/done']: `
+['queue item mark as success/done']: `
   // with "1ae234e9-3c6c-457d-bb38-0dbcdcb67e8a" as q_id
   match (q:Queued {id: q_id})
   set

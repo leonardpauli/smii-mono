@@ -173,14 +173,41 @@ async function tmp_scripts () {
 	`, {channel_raw: example_channel_raw})
 
 
-	true && await this.neo4j_request_and_log(
+	false && await this.neo4j_request_and_log(
+		queries['queue remove awaiting'])
+
+	false && await this.neo4j_request_and_log(
+		queries['queue inspect stalling']({dur_str: '"PT1S"'}))
+
+	false && await this.neo4j_request_and_log(
+		queries['queue reset stalling "taken"']({dur_str: '"PT1S"'}))
+
+	false && await this.neo4j_request_and_log(
+		queries['queue add unqueued channels for fetch (ordered by featured by channel size)']({count: 1}))
+
+
+	false && await this.neo4j_request_and_log(
 		queries['register/ensure processor + mark as started']({p_id: '$p_id'}), {
 			p_id: config.processor_id,
 		})
 
+	false && await this.neo4j_request_and_log(
+		queries['queue channels by id once']({xs: '$xs'}), {
+			xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
+		})
+	true && await this.neo4j_request_and_log(queries['queue inspect with logs'])
+
+	if (true) {
+		const p_id = config.processor_id
+		const res = await this.neo4j_request(queries['queue take awaiting']({p_id: '$p_id', count: 5}), {p_id})
+		await this.batch_fetch_import_channels(res, {p_id})
+	}
+	return
+
+
 	false && await this.batch_fetch_import_channels([
 		// {slug: yt_channel_username_beneater},
-		{id: yt_channel_id_linustechtips},
+		{channel: {id: yt_channel_id_linustechtips}},
 	])
 }
 
