@@ -134,7 +134,12 @@ const action_list = [{
 }, {
 	type: 'neo4j_query',
 	title: 'queue.viz.queued.list',
-	query: fetcher_queries['queue viz queued list'](),
+	// TODO: do not hardcode arbitrary default values
+	param_get: (ctx)=> ({cutoff_date: ctx.payload.cutoff_date || '20190101'}),
+	query: ctx=> fetcher_queries['queue viz queued list']({
+		count: parseInt(ctx.payload.count, 10) || 300,
+		cutoff_date: '$cutoff_date',
+	}),
 }, {
 	type: 'neo4j_query',
 	title: 'queue.add.channels.random',
@@ -143,14 +148,14 @@ const action_list = [{
 	type: 'neo4j_query',
 	title: 'queue.add.channels.featured',
 	query: ctx=> fetcher_queries['queue add channels (from featured_channel, ordered by featured by channel size)']({
-		count: ctx.payload.count || 1,
+		count: parseInt(ctx.payload.count, 10) || 1,
 	}),
 }, {
 	type: 'neo4j_query',
 	title: 'queue.add.channels.by_id_once',
 	param_get: ctx=> ({xs: ctx.payload.xs}),
 	query: ctx=> fetcher_queries['queue add channels by id once']({
-		xs: '$xs', priority: ctx.payload.priority || 1}),
+		xs: '$xs', priority: parseFloat(ctx.payload.priority) || 1}),
 }]
 
 
