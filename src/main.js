@@ -26,8 +26,15 @@ const main = {
 	async init () {
 		dlog({at: 'main.start'})
 
-		this.session = neo4j_utils.session_setup({config: config.neo4j, deinit})
+		const driver = neo4j_utils.driver_setup({config: config.neo4j, deinit})
+		this.session = driver.session()
+		deinit.add(()=> {
+			dlog('closing neo4j connection...')
+			return this.session.close()
+		})
 
+
+		// TODO: key shifting?
 		config.youtube.key = config.youtube.key_list[0]
 		await yt_api.init(config.youtube)
 
@@ -80,7 +87,8 @@ const main = {
 		dlog('queue_poll_do')
 
 		const p_id = config.processor_id
-		const res = await this.neo4j_request(queries['queue take awaiting']({p_id: '$p_id', count: 3}), {p_id})
+		const res = await this.neo4j_request(queries['queue take awaiting']({
+			p_id: '$p_id', count: config.queue_take_count}), {p_id})
 		await this.batch_fetch_import_channels(res, {p_id})
 
 		if (this.queue_poll_running) {
