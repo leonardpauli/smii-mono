@@ -26,7 +26,7 @@ const main = {
 	async init () {
 		dlog({at: 'main.start'})
 
-		const driver = neo4j_utils.driver_setup({config: config.neo4j, deinit})
+		const driver = neo4j_utils.driver_setup(config.neo4j)
 		this.session = driver.session()
 		deinit.add(()=> {
 			dlog('closing neo4j connection...')
