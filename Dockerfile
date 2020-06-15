@@ -7,10 +7,11 @@ RUN apk add --update \
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --only=production
+# COPY package*.json ./
+# RUN npm ci --only=production
 
-COPY . .
+# COPY . .
 
 EXPOSE 3000
-CMD ["node", "src/main.js"]
+# CMD ["node", "src/main.js"]
+CMD ["sh", "-c", "npm ci --only=production && node src/main.js"]
