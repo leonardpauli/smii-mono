@@ -1,5 +1,5 @@
 {
-  "name": "smii-fetcher-yt-20200610",
+  "name": "smii-fetcher-20200610",
   "version": "0.1.0",
   "description": "social-media-influencer-insights fetcher for yt",
   "main": "src/main.js",
