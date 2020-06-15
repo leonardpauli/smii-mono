@@ -164,6 +164,33 @@ const queries = {
   channel_import_queued_mark_done,
 
 
+['queue viz processors list']: ()=>
+`
+match (p:Processor)
+optional match (l:Log)
+return
+  p {.id},
+  collect(l {.at, .error, created_at: tostring(l.created_at)}) as logs
+`,
+
+['queue viz queued list']: ()=>
+`
+match (q:Queued)
+optional match (q)<-[:has_node]-(p:Processor)
+optional match (q)-[:has_node]->(c:Channel)
+optional match (c)-[:has_featured_channel]->(fc:Channel)
+// optional match (c)-[:has_uploads]->(pl:Playlist)-[:has_video]->(v:Video)
+with q, p, c, collect(fc.id) as featured
+optional match (c)-[:has_country]->(cu:Country)
+// return *
+return
+  q {.id, .priority, .status},
+  p.id as p_id,
+  c {.id, .slug, .title, fetched_at: tostring(c.fetched_at), .subscriber_count},
+  cu.yt_code as country
+`,
+
+
 ['queue add channels (rand 10 unqueued)']:
 // match ()-[:has_featured_channel]->(c:Channel_yt)
 `

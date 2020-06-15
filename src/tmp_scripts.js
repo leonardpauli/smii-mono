@@ -173,6 +173,13 @@ async function tmp_scripts () {
 	`, {channel_raw: example_channel_raw})
 
 
+
+	false && await this.neo4j_request_and_log(
+		queries['queue viz processors list']())
+	false && await this.neo4j_request_and_log(
+		queries['queue viz queued list']())
+
+
 	false && await this.neo4j_request_and_log(
 		queries['queue remove awaiting'])
 
@@ -185,7 +192,7 @@ async function tmp_scripts () {
 	false && await this.neo4j_request_and_log(
 		queries['queue reset stalling "taken"']({dur_str: '"PT1S"'}))
 
-	true && await this.neo4j_request_and_log(
+	false && await this.neo4j_request_and_log(
 		queries['queue add channels (from featured_channel, ordered by featured by channel size)']({count: 10}))
 
 
@@ -194,7 +201,7 @@ async function tmp_scripts () {
 			p_id: config.processor_id,
 		})
 
-	true && await this.neo4j_request_and_log(
+	false && await this.neo4j_request_and_log(
 		queries['queue add channels by id once']({xs: '$xs'}), {
 			xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
 		})
