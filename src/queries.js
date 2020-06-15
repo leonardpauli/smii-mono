@@ -191,7 +191,7 @@ return
 `,
 
 
-['queue add channels (rand 10 unqueued)']:
+['queue add channels (rand 10 unqueued)']: ()=>
 // match ()-[:has_featured_channel]->(c:Channel_yt)
 `
   match (c:Channel_yt)
@@ -218,7 +218,8 @@ return
 
 ['queue add channels by id once']: ({xs, priority = 1.0})=>
 `
-  unwind ${xs} as x
+  with ${xs} as xs
+  unwind xs as x
   merge (c:Channel:Channel_yt {id: x})
   with c
   optional match (c)<-[:has_node]-(pq:Queued)
