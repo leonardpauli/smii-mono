@@ -4,8 +4,9 @@
   "description": "social-media-influencer-insights api",
   "main": "src/main.js",
   "dependencies": {
+    "@leonardpauli/utils": "github:leonardpauli/js-utils#jun2020",
     "neo4j-driver": "^4.0.2",
-    "@leonardpauli/utils": "github:leonardpauli/js-utils#jun2020"
+    "smii-fetcher-20200610": "github:leonardpauli/smii-fetcher-20200610#main"
   },
   "devDependencies": {},
   "scripts": {

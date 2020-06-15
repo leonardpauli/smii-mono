@@ -1,4 +1,5 @@
 const fs = require('fs')
+const {queries: fetcher_queries} = require('smii-fetcher-20200610/src/queries.js')
 
 
 const action_list = [{
@@ -126,6 +127,31 @@ const action_list = [{
 		await fs.promises.writeFile(filename, JSON.stringify({nodes, links}))
 		return {filename}
 	},
+}, {
+	type: 'neo4j_query',
+	title: 'queue.viz.processors.list',
+	query: fetcher_queries['queue viz processors list'](),
+}, {
+	type: 'neo4j_query',
+	title: 'queue.viz.queued.list',
+	query: fetcher_queries['queue viz queued list'](),
+}, {
+	type: 'neo4j_query',
+	title: 'queue.add.channels.random',
+	query: fetcher_queries['queue add channels (rand 10 unqueued)'](),
+}, {
+	type: 'neo4j_query',
+	title: 'queue.add.channels.featured',
+	query: ctx=> fetcher_queries['queue add channels (from featured_channel, ordered by featured by channel size)']({
+		count: ctx.payload.count || 1,
+	}),
+}, {
+	type: 'neo4j_query',
+	title: 'queue.add.channels.by_id_once',
+	param_get: ctx=> ({xs: ctx.payload.xs}),
+	query: ctx=> fetcher_queries['queue add channels by id once']({
+		xs: '$xs', priority: ctx.payload.priority || 1}),
 }]
+
 
 module.exports = {action_list}
