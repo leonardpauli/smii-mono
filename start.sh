@@ -16,6 +16,7 @@ docker rm $container_name &>/dev/null
 docker run -d \
 	--name $container_name \
 	-v "$(pwd)":/app \
+	--network=$neo4j_container_net \
 	-e neo4j_url="$neo4j_url" \
 	-e neo4j_user="$neo4j_user" \
 	-e neo4j_pass="$neo4j_pass" \
