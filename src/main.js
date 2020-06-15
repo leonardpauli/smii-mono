@@ -22,12 +22,12 @@ const main = {
 
 		const ctx = {}
 
-		ctx.session = neo4j_utils.session_setup({config: config.neo4j, deinit})
-		const session_get = ctx=> ctx.session
+		ctx.neo4j_driver = neo4j_utils.driver_setup(config.neo4j)
+		const session_use = ctx=> neo4j_utils.session_use({deinit, driver: ctx.neo4j_driver})
 
 		const action_type_list = [
 			action_type_generic(),
-			neo4j_utils.server_action_type_raw({session_get}),
+			neo4j_utils.server_action_type_raw({session_use}),
 		]
 		const action_type_register = action_type_load(action_type_list)
 		const action_register = action_load(action_list, action_type_register)
