@@ -23,6 +23,10 @@ legend:
  */
 
 
+// TODO: using non-param fields is dangerous (if accepting string from client,
+// exposes arbitrary db access; only as internal snippets)
+// {though somewhat neccessary atm as neo4j.cypher.limit doesn't support params?}
+
 
 const example_channel_raw = {
   id: 'UCXuqSBlHAE6Xw-yeJA0Tunw',
@@ -173,9 +177,12 @@ return
   collect(l {.at, .error, created_at: tostring(l.created_at)}) as logs
 `,
 
-['queue viz queued list']: ()=>
+['queue viz queued list']: ({count = '300', cutoff_date = '"20190101"'})=>
 `
 match (q:Queued)
+with q, coalesce(q.finished_at, q.taken_at, q.created_at) as last_d
+where last_d > datetime(${cutoff_date})
+with q order by last_d desc limit ${count}
 optional match (q)<-[:has_node]-(p:Processor)
 optional match (q)-[:has_node]->(c:Channel)
 optional match (c)-[:has_featured_channel]->(fc:Channel)
