@@ -8,7 +8,8 @@ legend:
     priority is Float
       // default: 1; higher is higher priority, eg. should be taken before lower priority
     status is Enum(Empty, 'taken', 'failed', 'done')
-    modified_at is Empty or Date
+    taken_at is Empty or Date // may be set even if status is null, eg. if reset:ed from stalling
+    finished_at is Empty or Date // done or failed (see connected :Log for failure reason)
 
   Log
     at is String
@@ -70,24 +71,23 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 `
 
 
-const channel_import = ({with_add = ''} = {})=> `
-// with $channel_raw as channel_raw
-merge (n:Channel:Channel_yt {id: channel_raw.id})
+const channel_import = ({channel_raw, with_add = ''})=> `
+merge (n:Channel:Channel_yt {id: ${channel_raw}.id})
 set
-  n += channel_raw.rest,
+  n += ${channel_raw}.rest,
   
-  n.slug = channel_raw.slug,
+  n.slug = ${channel_raw}.slug,
 
-  n.published_at = case when channel_raw.published_at is null then null else datetime(channel_raw.published_at) end,
-  n.fetched_at = case when channel_raw.fetched_at is null then null else datetime(channel_raw.fetched_at) end,
+  n.published_at = case when ${channel_raw}.published_at is null then null else datetime(${channel_raw}.published_at) end,
+  n.fetched_at = case when ${channel_raw}.fetched_at is null then null else datetime(${channel_raw}.fetched_at) end,
 
-  n.view_count = toInteger(channel_raw.view_count),
-  n.post_count = toInteger(channel_raw.post_count),
+  n.view_count = toInteger(${channel_raw}.view_count),
+  n.post_count = toInteger(${channel_raw}.post_count),
 
-  n.subscriber_count = case when channel_raw.subscriber_count_hidden = true then null else toInteger(channel_raw.subscriber_count) end,
+  n.subscriber_count = case when ${channel_raw}.subscriber_count_hidden = true then null else toInteger(${channel_raw}.subscriber_count) end,
 
-  n.country = channel_raw.country
-with n, channel_raw ${with_add}
+  n.country = ${channel_raw}.country
+with n, ${channel_raw}${with_add}
 
 
 // foreach(dummy in [1] |
@@ -95,62 +95,63 @@ with n, channel_raw ${with_add}
 //   merge (n)-[r:has_country]->(:Country)
 //   delete r
 // )
-foreach(dummy in case when channel_raw.country is not null then [1] else [] end |
-  merge (n_country:Country {yt_code: channel_raw.country})
+foreach(dummy in case when ${channel_raw}.country is not null then [1] else [] end |
+  merge (n_country:Country {yt_code: ${channel_raw}.country})
   merge (n)-[:has_country]->(n_country)
 )
 
 ${_text_node_replace({
   type: 'has_keywords',
-  content: 'channel_raw.keywords',
+  content: `${channel_raw}.keywords`,
 })}
 
 ${_text_node_replace({
   type: 'has_description',
-  content: 'channel_raw.description',
+  content: `${channel_raw}.description`,
 })}
 
 ${_text_node_replace({
   type: 'has_left',
-  content: 'channel_raw.left',
+  content: `${channel_raw}.left`,
 })}
 
-foreach(dummy in case when channel_raw.uploads_playlist_id is not null then [1] else [] end |
-  merge (p:Playlist {id: channel_raw.uploads_playlist_id})
+foreach(dummy in case when ${channel_raw}.uploads_playlist_id is not null then [1] else [] end |
+  merge (p:Playlist {id: ${channel_raw}.uploads_playlist_id})
   merge (n)-[:has_uploads]->(p)
 )
 
-foreach(dummy in case when channel_raw.favorites_playlist_id is not null then [1] else [] end |
-  merge (p:Playlist {id: channel_raw.favorites_playlist_id})
+foreach(dummy in case when ${channel_raw}.favorites_playlist_id is not null then [1] else [] end |
+  merge (p:Playlist {id: ${channel_raw}.favorites_playlist_id})
   merge (n)-[:has_favorites]->(p)
 )
 
-foreach(dummy in case when channel_raw.likes_playlist_id is not null then [1] else [] end |
-  merge (p:Playlist {id: channel_raw.likes_playlist_id})
+foreach(dummy in case when ${channel_raw}.likes_playlist_id is not null then [1] else [] end |
+  merge (p:Playlist {id: ${channel_raw}.likes_playlist_id})
   merge (n)-[:has_likes]->(p)
 )
 
-foreach(fc_id in channel_raw.featured_channel_ids |
+foreach(fc_id in ${channel_raw}.featured_channel_ids |
   merge (fc:Channel:Channel_yt {id: fc_id})
   merge (n)-[:has_featured_channel]->(fc)
 )
 
-with n, channel_raw ${with_add}
+with n, ${channel_raw}${with_add}
 `;
 
 
-const channel_import_queued_mark_done = ()=> `
+const channel_import_queued_mark_done = ({p_id, xs})=>
 // with "..." as p_id, [{q_id: "...", channel: {...}}] as xs
+`
 match (p:Processor {id: p_id})
 unwind xs as x
 with x.channel as channel_raw, x.q_id as q_id, p
 
-${channel_import({with_add: ', q_id, p'})}
+${channel_import({channel_raw: 'channel_raw', with_add: ', q_id, p'})}
 
 match (q:Queued {id: q_id})
 set
   q.status = 'done',
-  q.modified_at = datetime()
+  q.finished_at = datetime()
 with q
 optional match (q)<-[r:has_node]-(p:Processor)
 delete r
@@ -163,7 +164,7 @@ const queries = {
   channel_import_queued_mark_done,
 
 
-['queue add rand 10 unqueued channels for fetch']:
+['queue add channels (rand 10 unqueued)']:
 // match ()-[:has_featured_channel]->(c:Channel_yt)
 `
   match (c:Channel_yt)
@@ -174,7 +175,7 @@ const queries = {
 `,
 
 
-['queue add unqueued channels for fetch (ordered by featured by channel size)']: ({count = '10'} = {})=>
+['queue add channels (from featured_channel, ordered by featured by channel size)']: ({count = '10'} = {})=>
 `
   match (c:Channel_yt)
   where c.subscriber_count is not null
@@ -188,7 +189,7 @@ const queries = {
 `,
 
 
-['queue channels by id once']: ({xs, priority = 1.0})=>
+['queue add channels by id once']: ({xs, priority = 1.0})=>
 `
   unwind ${xs} as x
   merge (c:Channel:Channel_yt {id: x})
@@ -215,7 +216,8 @@ const queries = {
   with q, c, l
   order by q.priority desc, q.created_at asc
   return
-    tostring(coalesce(q.modified_at, q.created_at)) as updated_at,
+    tostring(coalesce(q.finished_at, q.taken_at, q.created_at)) as updated_at,
+    duration.between(q.taken_at, q.finished_at).milliseconds as duration,
     q {.priority, .status},
     c {.id, .title, fetched_at: tostring(c.fetched_at)} as channel,
     collect(l {.at}) as logs
@@ -226,7 +228,7 @@ const queries = {
 // https://neo4j.com/docs/cypher-manual/current/functions/temporal/duration/
 `
   match (q:Queued)-[:has_node]->(c:Channel_yt)
-  where q.status is not null and q.modified_at < datetime() - duration(${dur_str})
+  where q.status = 'taken' and q.taken_at < datetime() - duration(${dur_str})
   with q, c
   order by q.priority desc, q.created_at asc
   optional match (q)<-[:has_node]-(p:Processor)
@@ -234,11 +236,11 @@ const queries = {
 `,
 
 
-['queue reset stalling "taken"']: ({dur_str = '"PT1H"'})=>
+['queue reset stalling']: ({dur_str = '"PT1H"'})=>
 `
   match (q:Queued)-[:has_node]->(c:Channel_yt)
-  where q.status = "taken" and q.modified_at < datetime() - duration(${dur_str})
-  set q.status = null, q.modified_at = datetime()
+  where q.status = 'taken' and q.taken_at < datetime() - duration(${dur_str})
+  set q.status = null
   with q
   optional match (q)<-[r:has_node]-(p:Processor)
   delete r
@@ -260,8 +262,8 @@ const queries = {
 // with "PT3S" as dur_str
 `
   match (q:Queued)-[:has_node]->(c:Channel_yt)
-  where q.status = "failed" and q.modified_at < datetime() - duration(dur_str)
-  set q.status = null, q.modified_at = datetime()
+  where q.status = "failed" and q.finished_at < datetime() - duration(dur_str)
+  set q.status = null, q.finished_at = null, q.taken_at = null
   with q
   optional match (q)<-[r:has_node]-(p:Processor)
   delete r
@@ -300,7 +302,8 @@ const queries = {
   limit ${count}
   set
     q.status = 'taken',
-    q.modified_at = datetime(),
+    q.taken_at = datetime(),
+    q.finished_at = null,
     q.id = coalesce(q.id, apoc.create.uuid())
   merge (p)-[:has_node]->(q)
   return q.id as q_id, c {.id, .slug} as channel
@@ -308,7 +311,7 @@ const queries = {
 `,
 
 
-['log message failing']:
+['queue item mark as failed']: ({log_obj, q_id})=>
 // warn: "(q)<-[r:has_node]-(p:Processor)", r is not deleted to aid failure debugging
 // with
 //  {at: "yt_fetch", text: "some err"} as log_obj,
@@ -322,7 +325,7 @@ const queries = {
   match (q:Queued {id: q_id})
   set
     q.status = 'failed',
-    q.modified_at = datetime()
+    q.finished_at = datetime()
   merge (q)<-[:has_node]-(l)
 `,
 
@@ -332,7 +335,7 @@ const queries = {
   match (q:Queued {id: q_id})
   set
     q.status = 'done',
-    q.modified_at = datetime()
+    q.finished_at = datetime()
   with q
   optional match (q)<-[r:has_node]-(p:Processor)
   delete r

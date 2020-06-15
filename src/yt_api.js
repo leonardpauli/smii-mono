@@ -10,7 +10,7 @@ const yt_api = {
 	_channels (query) { // quota: 1+(2+2+2+2)
 		return this.req({
 			endpoint: '/channels',
-			part: ['snippet', 'contentDetails', 'statistics', 'brandingSettings'],
+			part: ['snippet', 'contentDetails', 'statisticsaa', 'brandingSettings'],
 			...query,
 		})
 	},
@@ -64,11 +64,7 @@ const yt_api = {
 				...query,
 			},
 			method: 'GET',
-		}).then(res=> ({data: res.json()})).catch(error=> ({error}))
-
-		if (res.error) {
-			console.error({where: 'yt_api.req', message: {m: 'res error', error: res.error}})
-		}
+		}).then(res=> res.json_full())
 
 		const json = {endpoint, query, date: new Date(), ...res}
 		return json

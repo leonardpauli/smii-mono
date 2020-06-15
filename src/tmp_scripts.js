@@ -168,7 +168,7 @@ async function tmp_scripts () {
 	false && await this.neo4j_request_and_log(queries.xPlus1, {x: 4})
 	false && await this.neo4j_request_and_log(`
 		with $channel_raw as channel_raw
-		${queries.channel_import()}
+		${queries.channel_import({channel_raw: 'channel_raw'})}
 		return n.title
 	`, {channel_raw: example_channel_raw})
 
@@ -195,19 +195,19 @@ async function tmp_scripts () {
 		queries['queue channels by id once']({xs: '$xs'}), {
 			xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
 		})
-	true && await this.neo4j_request_and_log(queries['queue inspect with logs'])
+	false && await this.neo4j_request_and_log(queries['queue inspect with logs'])
 
-	if (true) {
+	if (false) {
 		const p_id = config.processor_id
 		const res = await this.neo4j_request(queries['queue take awaiting']({p_id: '$p_id', count: 5}), {p_id})
 		await this.batch_fetch_import_channels(res, {p_id})
 	}
-	return
 
 
-	false && await this.batch_fetch_import_channels([
-		// {slug: yt_channel_username_beneater},
-		{channel: {id: yt_channel_id_linustechtips}},
+	true && await this.batch_fetch_import_channels([
+		// {channel: {slug: yt_channel_username_beneater}},
+		{channel: {slug: "non_existing_account_1234253092834091"}},
+		// {channel: {id: yt_channel_id_linustechtips}},
 	])
 }
 
