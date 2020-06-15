@@ -235,6 +235,17 @@ const queries = {
   return p as processor, q as queued, c as channel
 `,
 
+['queue inspect taken for processor']: ({p_id = '$p_id'})=>
+`
+  match (p:Processor {id: ${p_id}})
+  with p
+  match (p)-[:has_node]->(q:Queued)-[:has_node]->(c:Channel_yt)
+  where q.status = 'taken'
+  with q, c
+  order by q.priority desc, q.created_at asc
+  return q.id as q_id, tostring(q.taken_at) as taken_at, c {.id, .slug} as channel
+`,
+
 
 ['queue reset stalling']: ({dur_str = '"PT1H"'})=>
 `
@@ -257,12 +268,10 @@ const queries = {
 `,
 
 
-['queue reset "failed"']:
-// with "PT1H" as dur_str
-// with "PT3S" as dur_str
+['queue reset "failed"']: ({dur_str = '"PT30S"'} = {})=>
 `
   match (q:Queued)-[:has_node]->(c:Channel_yt)
-  where q.status = "failed" and q.finished_at < datetime() - duration(dur_str)
+  where q.status = "failed" and q.finished_at < datetime() - duration(${dur_str})
   set q.status = null, q.finished_at = null, q.taken_at = null
   with q
   optional match (q)<-[r:has_node]-(p:Processor)

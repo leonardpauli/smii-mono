@@ -10,7 +10,7 @@ const yt_api = {
 	_channels (query) { // quota: 1+(2+2+2+2)
 		return this.req({
 			endpoint: '/channels',
-			part: ['snippet', 'contentDetails', 'statisticsaa', 'brandingSettings'],
+			part: ['snippet', 'contentDetails', 'statistics', 'brandingSettings'],
 			...query,
 		})
 	},

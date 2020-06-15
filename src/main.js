@@ -5,6 +5,7 @@ const {
 	noop,
 	is_object, obj_extract, obj_map,
 	xs_remove,
+	delay,
 	catch_allow_code,
 	error: error_make,
 	json_to_string_or_empty,
@@ -31,12 +32,21 @@ const main = {
 		await yt_api.init(config.youtube)
 
 
-		const tmp_scripts_run = true
+		const tmp_scripts_run = false
 		if (tmp_scripts_run) {
 			await tmp_scripts.call(this)
 			this.exit()
 			return
 		}
+
+
+		const p_id = config.processor_id
+
+		await this.neo4j_request_and_log(
+			queries['processor register/ensure and mark as started']({p_id: '$p_id'}), {p_id})
+
+		await this.neo4j_request_and_log(
+			queries['queue inspect taken for processor']({p_id: '$p_id'}), {p_id})
 
 
 		deinit.add(()=> {
@@ -48,6 +58,34 @@ const main = {
 	},
 	exit () { // not in use?
 		deinit.exit()
+	},
+
+	queue_poll_delay: config.queue_poll_delay,
+	queue_poll_timeout: null,
+	queue_poll_running: false,
+	queue_poll_start () {
+		if (this.queue_poll_running) return
+		this.queue_poll_running = true
+		this.queue_poll_do()
+	},
+	queue_poll_stop () {
+		this.queue_poll_running = false
+		if (this.queue_poll_timeout!==null) {
+			clearTimeout(this.queue_poll_timeout)
+			this.queue_poll_timeout = null
+		}
+	},
+	async queue_poll_do () {
+
+		dlog('queue_poll_do')
+
+		const p_id = config.processor_id
+		const res = await this.neo4j_request(queries['queue take awaiting']({p_id: '$p_id', count: 3}), {p_id})
+		await this.batch_fetch_import_channels(res, {p_id})
+
+		if (this.queue_poll_running) {
+			this.queue_poll_timeout = setTimeout(()=> this.queue_poll_running && this.queue_poll_do(), this.queue_poll_delay)
+		}
 	},
 
 	neo4j_request (query, params = {}) {
@@ -158,30 +196,6 @@ const main = {
 			i++
 		}
 		return i
-	},
-
-	queue_poll_delay: 1000,
-	queue_poll_timeout: null,
-	queue_poll_running: false,
-	queue_poll_start () {
-		if (this.queue_poll_running) return
-		this.queue_poll_running = true
-		this.queue_poll_do()
-	},
-	queue_poll_stop () {
-		this.queue_poll_running = false
-		if (this.queue_poll_timeout!==null) {
-			clearTimeout(this.queue_poll_timeout)
-			this.queue_poll_timeout = null
-		}
-	},
-	async queue_poll_do () {
-
-		dlog('queue_poll_do')
-
-		if (this.queue_poll_running) {
-			this.queue_poll_timeout = setTimeout(()=> this.queue_poll_running && this.queue_poll_do(), this.queue_poll_delay)
-		}
 	},
 
 	async batch_fetch_import_channels (xs, {p_id} = {}) {

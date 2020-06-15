@@ -10,6 +10,7 @@ const config = {
 		pass: process.env.neo4j_pass,
 	},
 	processor_id: process.env.processor_id,
+	queue_poll_delay: 2000,
 }
 
 module.exports = {config}
