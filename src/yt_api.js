@@ -48,6 +48,16 @@ const yt_api = {
 			maxResults,
 		})
 	},
+
+	// https://developers.google.com/youtube/v3/docs/i18nRegions
+	i18n_regions ({lang = 'en_US'} = {}) { // quota: 1+(1)
+		return this.req({
+			endpoint: '/i18nRegions',
+			part: ['snippet'],
+			hl: lang,
+		})
+	},
+
 	async req ({endpoint, ...query}) {
 
 		if (this.config.prevent_live_yt_reqs)
