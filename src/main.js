@@ -37,7 +37,8 @@ const main = {
 
 	async start () {
 		if (dev_snippets.enabled) {
-			return dev_snippets.main.call(this)
+			await dev_snippets.main.call(this)
+			return deinit.exit()
 		} else {
 			return this.processor_start()
 		}

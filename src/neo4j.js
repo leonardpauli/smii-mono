@@ -11,14 +11,15 @@ const fragment = {
 	
 	neo4j_request (query, params = {}) {
 		return neo4j_utils.execute_to_objects(this.session, query, params)
+	},
+
+	async neo4j_request_and_log (query, params = {}) {
+		// console.dir({query, params})
+		const res = await this.neo4j_request(query, params)
 			.catch(error=> {
 				console.dir({at: 'neo4j_request.error', query, error})
 				return Promise.reject(error)
 			})
-	},
-
-	async neo4j_request_and_log (query, params = {}) {
-		const res = await this.neo4j_request(query, params)
 		console.dir(res, {depth: 5})
 	},
 

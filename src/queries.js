@@ -74,10 +74,100 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 )
 `
 
+const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n'})=> `
+foreach(dummy in case when ${channel_raw}.id is not null then [1] else [] end |
+  merge (:Channel_yt {id: ${channel_raw}.id})
+)
+foreach(dummy in case when ${channel_raw}.slug is not null then [1] else [] end |
+  merge (:Channel_yt {slug: ${channel_raw}.slug})
+)
+with ${channel_raw}${with_add}
+match (${c_var}:Channel_yt)
+where ${c_var}.id = ${channel_raw}.id or ${c_var}.slug = ${channel_raw}.slug
+with ${c_var}, ${channel_raw}${with_add}
+`
+
+const channel_add_with_campaign = ({xs, campaign_id, with_add = ''})=>
+/*
+with [{
+  id: 'UCb1cPPukAdNqMT8dzHRhS5Q',
+  slug: null,
+  meta: {
+    influencer_handle: 'Neurodrome',
+    status: 'Live',
+    relationship: 'One-off',
+    category: 'Politics',
+    email: 'neurodromeyt@gmail.com',
+    revenue: 1426,
+    sales_from_fees: 18,
+    country_iso: 'IT'
+  }
+},
+{
+  id: null,
+  slug: 'franciscoherrera84',
+  meta: {
+    influencer_handle: 'Frankie Tech',
+    status: 'Live',
+    relationship: 'One-off',
+    category: 'Tech',
+    email: 'frankietechvideos@gmail.com',
+    country_iso: 'HK'
+  }
+}] as xs, 'nordvpn_jun20' as campaign_id
+
+ */
+`
+merge (campaign:Campaign {id: ${campaign_id}})
+on create set campaign.created_at = datetime()
+with ${xs} as xs, campaign
+unwind xs as x
+
+${channel_merge_match({channel_raw: 'x', with_add: ', campaign'+with_add, c_var: 'c'})}
+
+merge (c)<-[:has_node]-(cd:CampaignData)<-[:has_campaign_data]-(campaign)
+set cd += x.meta
+
+// return c, cd, campaign
+return count(distinct c), count(distinct cd), count(distinct campaign)
+`
+
+const video_add_with_campaign = ({xs, campaign_id, with_add = ''})=>
+/*
+with [{
+  id: 'UCb1cPPuk',
+  meta: {
+    ...
+  }
+},
+{
+  id: 'UCffPPuk',
+  meta: {
+    ...
+  }
+}] as xs, 'nordvpn_jun20' as campaign_id
+ */
+`
+merge (campaign:Campaign {id: ${campaign_id}})
+on create set campaign.created_at = datetime()
+with ${xs} as xs, campaign
+unwind xs as x
+
+merge (v:Video {id: x.id})
+with x, v, campaign${with_add}
+
+merge (v)<-[:has_node]-(cd:CampaignData)<-[:has_campaign_data]-(campaign)
+set cd += x.meta
+
+// return v, cd, campaign
+return count(distinct v), count(distinct cd), count(distinct campaign)
+`
 
 const channel_import = ({channel_raw, with_add = ''})=> `
-merge (n:Channel:Channel_yt {id: ${channel_raw}.id})
+${channel_merge_match({channel_raw, with_add, c_var: 'n'})}
+
 set
+  n :Channel,
   n += ${channel_raw}.rest,
   
   n.slug = ${channel_raw}.slug,
@@ -166,6 +256,9 @@ const queries = {
   xPlus1: `return $x + 1 as res`,
   channel_import,
   channel_import_queued_mark_done,
+  channel_add_with_campaign,
+
+  video_add_with_campaign,
 
 
 ['queue viz processors list']: ()=>

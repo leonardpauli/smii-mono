@@ -19,7 +19,54 @@ async function main () {
 
 	false && console.dir(await yt_api__i18n_regions())
 
-	await nordvpn_clean.call(this)
+	if (true) {
+
+		const campaign_id = 'nordvpn_jun20'
+		const {out, missing} = await nordvpn_clean.call(this)
+
+		dlog({
+			at: 'dataset.import.start',
+			channels: out.channels.length,
+			posts: out.posts.length,
+		})
+
+		if (missing.channels.length || missing.posts.length) {
+			dlog.warn({
+				at: 'dataset.import.missing data',
+				channels: missing.channels.length,
+				posts: missing.posts.length,
+			})
+		}
+		
+		// TODO: json.stringify sub-fields on out?
+		// console.dir(out.channels.slice(0, 3))
+
+		true && await this.neo4j_request_and_log(
+			queries['channel_add_with_campaign']({
+				xs: '$xs',
+				campaign_id: '$campaign_id',
+			}), {
+				xs: out.channels, // .slice(0, 30),
+				campaign_id,
+			})
+
+		const post_meta_flatten = a=> ({
+			...a,
+			upload_date: a.upload_date && a.upload_date.toISOString(),
+		})
+		const post_flatten = a=> ({...a, meta: a.meta && post_meta_flatten(a.meta)})
+
+		// console.dir(out.posts.slice(0, 3).map(post_flatten))
+		true && await this.neo4j_request_and_log(
+			queries['video_add_with_campaign']({
+				xs: '$xs',
+				campaign_id: '$campaign_id',
+			}), {
+				xs: out.posts.map(post_flatten), // .slice(0, 3),
+				campaign_id,
+			})
+	}
+
 
 	if (false) {
 		const d = await yt_api.videos({
@@ -42,6 +89,7 @@ async function nordvpn_clean () {
 	const clear_as_num = (row, k)=> {
 		if (!row[k] && row[k]!==0) delete row[k]
 	}
+
 	raw.map(row=> {
 		if ('country' in row) {
 			if (row.country) {
@@ -105,8 +153,34 @@ async function nordvpn_clean () {
 		})
 	})
 
-	console.dir(xs_overview(raw.slice(10), {unwrap: true, string_limit: 0}), {depth: 8})
+	// console.dir(xs_overview(raw, {unwrap: true, string_limit: 0}), {depth: 8})
 
+	const _posts_raw = []
+	const _channels_raw = raw.map(row=> {
+		const {id, slug, posts, ...meta} = row
+		posts && posts.map(row=> {
+			const {id, ...meta} = row
+			_posts_raw.push({id, meta})
+		})
+		return {id, slug, meta}
+	})
+
+	const out = {
+		posts: [],
+		channels: [],
+	}
+	const missing = {
+		posts: [],
+		channels: [],
+	}
+
+	_posts_raw.map(p=> {p.id?out.posts.push(p):missing.posts.push(p)})
+	_channels_raw.map(p=> {p.id||p.slug?out.channels.push(p):missing.channels.push(p)})
+
+	// console.dir(xs_overview([out], {unwrap: true, string_limit: 3}), {depth: 3})
+	// console.dir(missing, {depth: 3})
+
+	return {out, missing}
 }
 
 
