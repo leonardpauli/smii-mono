@@ -33,34 +33,79 @@ async function main () {
 }
 
 async function nordvpn_clean () {
+	const country_code_normalise = await country_code_normalise_get()
 
 	dlog({at: 'nordvpn_clean', load: 'nordvpn_rado_v2.json'})
 
 	const raw = require('../../local/nordvpn_rado_v2.json')
 
-	console.dir(xs_overview(raw.slice(2)), {depth: 3})
-	return
-
-	// inspect profile_links
-	if (true) {
-		const extraction = extract_fields_grouped(raw, {
-			field_get: row=> row.profile_link,
-			parse: yt_api__channel_url_parse,
-			group_get: parsed=> parsed.type,
-		})
-		extraction.groups = obj_entries_map([...extraction.groups],
-			v=> histogram_get(v, {key_get: o=> o.parsed.id, limit: 1}))
-		console.dir({profile_link: extraction}, {depth: 3})
+	const clear_as_num = (row, k)=> {
+		if (!row[k] && row[k]!==0) delete row[k]
 	}
-
-	// inspect country
-	if (true) {
-		const country_code_normalise = await country_code_normalise_get()
-		const info = {
-			country: histogram_get(raw, {key_get: row=> country_code_normalise(row.country)})
+	raw.map(row=> {
+		if ('country' in row) {
+			if (row.country) {
+				const m = country_code_normalise(row.country)
+				if (m) {
+					row.country_iso = m
+				} else {
+					row.country_other = row.country
+				}
+			}
+			delete row.country
 		}
-		console.dir(info, {depth: 3})
-	}
+		if ('profile_link' in row) {
+			if (row.profile_link) {
+				const m = yt_api__channel_url_parse(row.profile_link)
+				if (m && m.type==='channel') {
+					row.id = m.id
+				} else if (m && m.type==='user') {
+					row.slug = m.id
+				} else {
+					row.profile_link_other = row.profile_link
+				}
+			}
+			delete row.profile_link
+		}
+		clear_as_num(row, 'revenue')
+
+		row.posts && row.posts.map(row=> {
+			clear_as_num(row, 'clicks')
+			clear_as_num(row, 'sales')
+			clear_as_num(row, 'cost')
+			delete row.year // clear_as_num(row, 'year')
+
+			if ('upload_date' in row) {
+				if (!row.upload_date) {
+					delete row.upload_date
+				} else {
+					const d = new Date(row.upload_date)
+					if (d) {
+						row.upload_date = d
+					} else {
+						row.upload_date_other = d
+						delete row.upload_date
+					}
+				}
+			}
+
+			if ('post_link' in row) {
+				if (row.post_link) {
+					const m = yt_api__video_url_parse(row.post_link)
+					if (m) {
+						row.id = m.id
+						if (m.t) row.post_link_t = m.t
+					} else {
+						row.post_link_other = row.post_link
+					}
+				}
+				delete row.post_link
+			}
+
+		})
+	})
+
+	console.dir(xs_overview(raw.slice(10), {unwrap: true, string_limit: 0}), {depth: 8})
 
 }
 
@@ -89,9 +134,9 @@ const extract_fields_grouped = (xs, {
 }
 
 
+
 const country_code_normalise_get = async ()=> {
 	const regions = await yt_api__i18n_regions()
-	regions.map(a=> console.dir(a))
 	
 	const map = new Map()
 	regions.map(r=> {
@@ -99,9 +144,29 @@ const country_code_normalise_get = async ()=> {
 		r.title && map.set(r.title.toLowerCase(), r.id)
 	})
 
+	const extra = {
+		'China': 'CN', 'CN': 'CN',
+
+		'Czech': 'CZ',
+		'cezch republic': 'CZ',
+		'czech republic': 'CZ',
+		'UK': 'GB',
+		'USA': 'US',
+		'Singapoore': 'SG',
+		'Korea': 'KR',
+		'UAE': 'AE',
+		'The Netherlands': 'NL',
+		'United kingdon': 'GB',
+		'Taiwain': 'TW',
+		'HongKong': 'HK',
+	}
+	Object.entries(extra).map(([k, v])=> {
+		map.set(k.toLowerCase(), v)
+	})
+
 	return str=> {
 		const res = map.get((str||'').trim().toLowerCase())
-		return res?res:'failed '+str
+		return res?res:null
 	}
 }
 
@@ -129,6 +194,19 @@ const yt_api__channel_url_parse = str=> {
 	const [_, type, id] = m
 	if (!['channel', 'user'].includes(type)) return null
 	return {type, id}
+}
+
+const yt_api__video_url_parse = str=> {
+	// https://www.youtube.com/watch?v=8OS6bnz67UY&t=117s
+	// https://youtu.be/BTcQlBnKouM
+	const yt_url_parse_regex = /(www\.)?(youtube\.com\/watch\?([^#]+)|youtu\.be\/([^?\/#]+))/
+	const m = str.match(yt_url_parse_regex)
+	if (!m) return null
+	const [_all, _www, _or, qs, id] = m
+	if (id) return {id}
+	const qs_map = Object.fromEntries(qs.split('&').map(v=> v.split('=')))
+	if (!qs_map.v) return null
+	return {id: qs_map.v, t: qs_map.t}
 }
 
 
