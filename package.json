@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@leonardpauli/utils": "github:leonardpauli/js-utils#jun2020",
+    "@observablehq/runtime": "^4.7.0",
     "core-js": "^3.6.4",
     "vue": "^2.6.11",
     "vue-router": "^3.1.6"

@@ -17,6 +17,10 @@ export default {
 		name: 'workers',
 		component: ()=> import(/* webpackChunkName: "workers" */ '@/views/workers/overview'),
 	}, {
+		path: '/queue-graph',
+		name: 'worker_queue_graph',
+		component: ()=> import(/* webpackChunkName: "workers" */ '@/views/workers/queue_graph'),
+	}, {
 		path: ':task_id',
 		name: 'workers_task',
 		component: ()=> import(/* webpackChunkName: "workers" */ '@/views/workers/task_detail'),

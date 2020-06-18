@@ -3,7 +3,8 @@
 	router-view.main
 	.sidebar
 		
-		router-link.link(:to="{name: 'tasker'}") Overview
+		router-link.link(:to="{name: 'workers'}") Overview
+		router-link.link(:to="{name: 'worker_queue_graph'}") Queue Graph
 
 	.header
 		h3 smii-web
