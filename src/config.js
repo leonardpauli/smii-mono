@@ -1,8 +1,8 @@
 const config = {
 	api: {
-		base_url: 'http://localhost:3000/api',
+		base_url: process.env.VUE_APP_base_url,
 	},
-	localStorage_key: 'PROJECTNAME_DATE',
+	localStorage_key: process.env.VUE_APP_localStorage_key,
 }
 
 export default config

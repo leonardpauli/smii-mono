@@ -1,10 +1,13 @@
 <template lang="pug">
 .landing
-	h1 PROJECT
-	i ...
+	h1 smii-web
+	i Collection of mini-modules towards a full-scale prototype
 	h2 Modules
 	ul
-		li: router-link(to="/tasker") Tasker
+		li
+			router-link(to="/tasker") Tasker
+			.comment (dev example)
+		li: router-link(to="/workers") Workers
 </template>
 <script>
 export default {
@@ -18,5 +21,11 @@ export default {
 	
 	h2
 		margin-top 20px
+		
+	.comment
+		margin-left 7px
+		display inline-block
+		text-decoration none
+		opacity 0.7
 		
 </style>

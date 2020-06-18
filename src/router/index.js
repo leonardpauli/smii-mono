@@ -2,6 +2,7 @@ import Vue from 'vue'
 import VueRouter from 'vue-router'
 import landing from '@/views/landing.vue'
 import tasker_router from '@/views/tasker/router'
+import workers_router from '@/views/workers/router'
 
 Vue.use(VueRouter)
 
@@ -23,6 +24,7 @@ const example_router = {
 const routes = [
 	landing_router,
 	tasker_router,
+	workers_router,
 	example_router,
 ]
 
