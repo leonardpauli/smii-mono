@@ -23,27 +23,90 @@ const yt_api = {
 			maxResults,
 		})
 	},
-	videos ({video_ids}) { // cost: 1+(2+2+2)quota per page request (eg. if just one req (even if for 5 vid ids), only 7 in quota)
+	videos ({video_ids}) { // cost: 1+(0+2+2+2+2)quota per page request (eg. if just one req (even if for 5 vid ids), only 9 in quota)
 		// https://developers.google.com/youtube/v3/docs/videos/list
 		/*
-		contentDetails: 2
-		fileDetails: 1
 		id: 0
-		liveStreamingDetails: 2
-		localizations: 2
-		player: 0
-		processingDetails: 1
-		recordingDetails: 2
+			(top-level)
+			kind: 'youtube#video',
+      etag: 'BeSxH9jeyIEIg4J4EnhU0CP14CI',
+      id: 'huKsSliDD3A',
+		
 		snippet: 2
+			publishedAt: '2020-02-23T09:15:00Z',
+			channelId: 'UC9VMz-llpSHTIfOzuggf5zA',
+			title: 'La Réalité du travail dans une entreprise Japonaise', // org locale
+			description: '...',
+			thumbnails: {
+			  default:  { width:  120, height:  90, url: 'https://i.ytimg.com/vi/huKsSliDD3A/default.jpg' },
+			  medium:   { width:  320, height: 180, url: 'https://i.ytimg.com/vi/huKsSliDD3A/mqdefault.jpg' },
+			  high:     { width:  480, height: 360, url: 'https://i.ytimg.com/vi/huKsSliDD3A/hqdefault.jpg' },
+			  standard: { width:  640, height: 480, url: 'https://i.ytimg.com/vi/huKsSliDD3A/sddefault.jpg' },
+			  maxres:   { width: 1280, height: 720, url: 'https://i.ytimg.com/vi/huKsSliDD3A/maxresdefault.jpg' }
+			},
+			channelTitle: 'Japania',
+			tags: ['travail au japon', 'réalité du travail au japon', ...],
+			categoryId: '22',
+			liveBroadcastContent: 'none',
+			defaultLanguage: 'fr',
+			localized: { // depending on .hl
+			  title: 'La Réalité du travail dans une entreprise Japonaise',
+			  description: '...'
+			},
+			defaultAudioLanguage: 'fr'
+
 		statistics: 2
+			viewCount: '79560',
+      likeCount: '3434',
+      dislikeCount: '102',
+      favoriteCount: '0',
+      commentCount: '529'
+
+    contentDetails: 2
+			duration: 'PT11M7S',
+			dimension: '2d',
+			definition: 'hd',
+			caption: 'true',
+			licensedContent: true,
+			contentRating: {},
+			projection: 'rectangular'
+		localizations: 2 // set hl to 'en_US' instead to get en version for free in snippet.localized
+			fr:
+				title: 'Coronavirus: Ce qui a changé dans la vie au Japon (Covid-19)',
+				description: '...'
+			en:
+				...
+		recordingDetails: 2
+			locationDescription: 'Tokyo',
+			location: { latitude: 35.6761919, longitude: 139.6503106, altitude: 0 }
+
+		// misc
+		player: 0
+			embedHtml: '<iframe width="480" height="270" src="//www.youtube.com/embed/AjWRjVYA0PY" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
 		status: 2
-		suggestions: 1
+			uploadStatus: 'processed',
+			privacyStatus: 'public',
+			license: 'youtube',
+			embeddable: true,
+			publicStatsViewable: true,
+			madeForKids: false
+		liveStreamingDetails: 2
 		topicDetails: 2
+		
+
+		// owner only:
+		fileDetails: 1
+		processingDetails: 1
+		suggestions: 1
 		 */
+		
 		return this.req({
 			endpoint: '/videos',
-			part: ['snippet', 'contentDetails', 'statistics'],
+			part:
+				['id', 'snippet', 'statistics', 'contentDetails', 'recordingDetails'],
+				// ['snippet', 'contentDetails', 'statistics'],
 			id: video_ids,
+			hl: 'en_US',
 		})
 	},
 	commentThreads ({video_id, include_replies = false, maxResults = 20}) { // quota: 1?+(2[+2])

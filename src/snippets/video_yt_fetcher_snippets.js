@@ -1,7 +1,7 @@
 const fs = require('fs')
 
 const {yt_api} = require('../yt_api.js')
-const {fs_json_file_read} = require('@leonardpauli/utils/src/fs.js')
+const {fs_json_file_read, fs_dir_ensure_full} = require('@leonardpauli/utils/src/fs.js')
 const {dlog} = require('@leonardpauli/utils/src/log.js')
 const {
 	identity, obj_entries_map, obj_map, xs_group,
@@ -93,10 +93,61 @@ async function main () {
 		console.dir(d, {depth: 7})
 	}
 
-	if (false) {
-		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
-		const a = [...new Set(res.map(r=> r.ch_id))]
-		// console.log(a)
+	if (true) {
+		const campaign_id = 'nordvpn_jun20'
+
+		const tlog = ({at, ...rest})=> dlog.time({at: campaign_id+'.'+at, ...rest})
+		const step = async ({id, fn, parse = v=> v, log = v=> ({count: v.length})})=> {
+			const res = await json_cache_use({
+				id: campaign_id+'.'+id,
+				fn,
+			})
+			const parsed = parse(res)
+			tlog({at: id, ...log(parsed)})
+			return parsed
+		}
+
+
+		tlog({at: 'channel_ids start'})
+
+		const channel_ids = await step({
+			id: 'channel_ids',
+			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id}),
+			parse: v=> [...new Set(v.map(r=> r.ch_id))],
+		})
+
+		const video_ids = await step({
+			id: 'video_ids',
+			fn: ()=> latest_video_ids_for_channels.call(this, {channel_ids, group_size: 10}),
+			parse: v=> v.map(a=> a.v_id),
+		})
+
+		// // console.dir(video_ids.slice(2, 4))
+		// // return
+
+		// const d = await yt_api.videos({
+		// 	video_ids: video_ids.slice(0, 100), // ['H7wx-35QSUM', 'Tp--FkiHyes'], // ['AjWRjVYA0PY', 'huKsSliDD3A'],
+		// 	// also checkout the other .parts
+		// })
+		// console.dir(d, {depth: 8})
+		// return
+
+		const size = 50
+		let i=0, slice
+		do {
+			slice = video_ids.slice(i*size, (i+1)*size)
+			if (slice.length==0) break
+		
+			const _res = await step({
+				id: 'yt_video_load.v4.'+i,
+				fn: ()=> yt_api.videos({video_ids: slice}),
+				log: v=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
+			})
+
+			i++
+		} while (true)
+		
+		return
 
 		/*
 		Plan:
@@ -125,15 +176,22 @@ async function main () {
 
 		upload tsv file to slack
 		 */
+		
+		// const d = await yt_api.videos({
+		// 	video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
+		// 	// also checkout the other .parts
+		// })
+		// console.dir(d, {depth: 10})
 
 		return
 	}
 
-	if (true) {
+	if (false) {
 		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
 		console.log(xs_to_tsv(res))
 	}
 }
+
 
 const xs_to_tsv = (xs, {fields = Object.keys(xs[0])}={})=> {
 	const fix_line = xs=> xs.map(a=> (''+a).replace(/[\t\n]+/g, ' ')).join('\t')
@@ -145,6 +203,20 @@ const xs_to_tsv = (xs, {fields = Object.keys(xs[0])}={})=> {
 	}
 
 	return txt
+}
+
+async function latest_video_ids_for_channels ({channel_ids, group_size = 10}) {
+	// channel_ids = ['UC9VMz-llpSHTIfOzuggf5zA', 'UCzRE5sLT_nQQaxUCnADO0bQ']
+	const res = await this.neo4j_request(`
+		unwind $channel_ids as ch_id
+		call apoc.cypher.doIt("
+			match (ch:Channel {id: ch_id})-[:has_uploads]->(:Playlist)-[:has_video]->(v:Video)
+			with ch, v order by v.published_at desc limit ${group_size}
+			return ch.id as ch_id, v.id as v_id
+		", {ch_id: ch_id}) yield value
+		return value.ch_id as ch_id, value.v_id as v_id
+	`, {channel_ids})
+	return res
 }
 
 async function campaign_extract_for_ml ({campaign_id}) {
@@ -348,18 +420,30 @@ const country_code_normalise_get = async ()=> {
 }
 
 
+let cache_dir_path_loaded = null
+const cache_dir_get = async ()=> {
+	return cache_dir_path_loaded
+		? cache_dir_path_loaded
+		: (cache_dir_path_loaded = await fs_dir_ensure_full('./local/cache'))
+}
+
+const json_cache_use = async ({id, fn})=> {
+	// TODO: ensure id is valid filename (chars + length, or just use fs to check) + use path.join
+	const cachefile = `${await cache_dir_get()}/${id}.json`
+	const cache = await fs_json_file_read(cachefile)
+	if (cache) return cache
+
+	const d = await fn()
+	await fs.promises.writeFile(cachefile, JSON.stringify(d))
+	return d
+}
+
 const yt_api__i18n_regions = async ()=> {
-	const get_raw = async ()=> {
-		const cachefile = './local/yt_api.i18n_regions.json'
-		const cache = await fs_json_file_read(cachefile)
-		if (cache) return cache
-
-		const d = await yt_api.i18n_regions()
-		await fs.promises.writeFile(cachefile, JSON.stringify(d))
-		return d
-	}
-
-	const raw = await get_raw()
+	const raw = await json_cache_use({
+		id: 'yt_api.i18n_regions',
+		fn: ()=> yt_api.i18n_regions(),
+	})
+	
 	const items = raw && raw.data && raw.data.items || []
 	return items.map(v=> ({id: v.id, title: v.snippet && v.snippet.name || null}))
 }
