@@ -225,7 +225,7 @@ foreach(dummy in case when ${channel_raw}.likes_playlist_id is not null then [1]
 )
 
 foreach(fc_id in ${channel_raw}.featured_channel_ids |
-  merge (fc:Channel:Channel_yt {id: fc_id})
+  merge (fc:Channel_yt {id: fc_id})
   merge (n)-[:has_featured_channel]->(fc)
 )
 
@@ -277,8 +277,8 @@ with q, coalesce(q.finished_at, q.taken_at, q.created_at) as last_d
 where last_d > datetime(${cutoff_date})
 with q order by last_d desc limit ${count}
 optional match (q)<-[:has_node]-(p:Processor)
-optional match (q)-[:has_node]->(c:Channel)
-optional match (c)-[:has_featured_channel]->(fc:Channel)
+optional match (q)-[:has_node]->(c:Channel_yt)
+optional match (c)-[:has_featured_channel]->(fc:Channel_yt)
 // optional match (c)-[:has_uploads]->(pl:Playlist)-[:has_video]->(v:Video)
 with q, p, c, collect(fc.id) as featured
 optional match (c)-[:has_country]->(cu:Country)
@@ -320,7 +320,7 @@ return
 `
   with ${xs} as xs
   unwind xs as x
-  merge (c:Channel:Channel_yt {id: x})
+  merge (c:Channel_yt {id: x})
   with c
   optional match (c)<-[:has_node]-(pq:Queued)
   where pq.status is null or pq.status = 'taken'

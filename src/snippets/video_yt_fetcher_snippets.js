@@ -18,6 +18,23 @@ const yt_channel_username_beneater = 'eaterbc'
 
 async function main () {
 
+	if (true) {
+		const channels_to_fetch = await fs_json_file_read('./local/nordvpn_jun20.channels_to_fetch.json')
+		const channel_ids = channels_to_fetch.map(a=> a.id).filter(Boolean)
+
+		const size = 10
+		let i = 5
+		// console.dir(channel_ids.slice(i*size, (i+1)*size))
+		// return
+		await this.neo4j_request_and_log(
+			queries['queue add channels by id once']({xs: '$xs'}), {
+				xs: channel_ids.slice(i*size, (i+1)*size),
+			})
+
+		return
+	}
+
+
 	false && console.dir(await yt_api__i18n_regions())
 
 	if (false) {

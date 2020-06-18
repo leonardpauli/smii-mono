@@ -30,6 +30,8 @@ const fragment = {
 					stack: ''+error.stack,
 				}
 
+				// TODO: error == 'no result' should not be logged as an error? but set .missing=true? (+delete .missing on successful match import)
+
 				// TODO: refactor prop as link (to :Processor)?
 				const no_queue_node = !x.q_id
 				if (no_queue_node) {
