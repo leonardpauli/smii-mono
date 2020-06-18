@@ -4,7 +4,8 @@ const {yt_api} = require('../yt_api.js')
 const {fs_json_file_read, fs_dir_ensure_full} = require('@leonardpauli/utils/src/fs.js')
 const {dlog} = require('@leonardpauli/utils/src/log.js')
 const {
-	identity, obj_entries_map, obj_map, xs_group,
+	identity, obj_entries_map, obj_map, obj_map_values, xs_group,
+	xs_sum,
 	xs_overview, xs_number_overview,
 } = require('@leonardpauli/utils/src/misc.js')
 const {queries, example_channel_raw} = require('../queries.js')
@@ -97,13 +98,13 @@ async function main () {
 		const campaign_id = 'nordvpn_jun20'
 
 		const tlog = ({at, ...rest})=> dlog.time({at: campaign_id+'.'+at, ...rest})
-		const step = async ({id, fn, parse = v=> v, log = v=> ({count: v.length})})=> {
+		const step = async ({id, fn, parse = v=> v, log = (v, _res)=> ({count: v.length})})=> {
 			const res = await json_cache_use({
 				id: campaign_id+'.'+id,
 				fn,
 			})
 			const parsed = parse(res)
-			tlog({at: id, ...log(parsed)})
+			tlog({at: id, ...log(parsed, res)})
 			return parsed
 		}
 
@@ -132,21 +133,79 @@ async function main () {
 		// console.dir(d, {depth: 8})
 		// return
 
+		const videos = []
+
 		const size = 50
 		let i=0, slice
 		do {
 			slice = video_ids.slice(i*size, (i+1)*size)
 			if (slice.length==0) break
 		
-			const _res = await step({
+			const items = await step({
 				id: 'yt_video_load.v4.'+i,
 				fn: ()=> yt_api.videos({video_ids: slice}),
-				log: v=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
+				parse: v=> v.data && v.data.items || [],
+				log: (_, v)=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
 			})
+
+			videos.push(...items)
 
 			i++
 		} while (true)
 		
+
+		const by_channel = xs_group(videos, {key_get: v=> v.snippet.channelId})
+		// console.dir(by_channel, {depth: 2})
+
+		const prepare_channel_stat_avgs = (ch_id, vs)=> {
+			// clean/parse
+			vs.forEach(v=> {
+				if (v.statistics) {
+					v.stats = obj_map_values(v.statistics, v=> v*1)
+					delete v.statistics
+				} else {v.stats = {}}
+				if (v.contentDetails) {
+					v.stats.duration = yt_dur_parse(v.contentDetails.duration)
+					delete v.contentDetails.duration
+				}
+			})
+
+			// extract
+			vs.forEach(v=> {
+				const {stats} = v
+				v.stats_calc = {
+					likes_per_rates: stats.likeCount/(stats.likeCount+stats.dislikeCount) || null,
+					likes_per_views: stats.likeCount/stats.viewCount || null,
+					comments_per_views: stats.commentCount/stats.viewCount || null,
+					duration: stats.duration || null,
+				}
+			})
+
+			const field_avg = (xs, vget = v=> v)=> {
+				const vs = xs.map(vget)
+				const ns = vs.filter(v=> typeof v==='number')
+				return xs_sum(ns)/ns.length
+			}
+			const stat_avgs = {
+				likes_per_rates: field_avg(vs, v=> v.stats_calc.likes_per_rates),
+				likes_per_views: field_avg(vs, v=> v.stats_calc.likes_per_views),
+				comments_per_views: field_avg(vs, v=> v.stats_calc.comments_per_views),
+				duration: field_avg(vs, v=> v.stats_calc.duration),
+				views: field_avg(vs, v=> v.stats.viewCount),
+			}
+
+			// const overview = xs_overview(vs_stats, {unwrap: true, string_map: v=> v.slice(0, 50)})
+			// console.dir({ch_id, stat_avgs}, {depth: 7})
+			// return
+			return stat_avgs
+		}
+
+		const ch_stat_avgs_map = Object.fromEntries([...by_channel]
+			.map(([ch_id, vs])=> [ch_id, prepare_channel_stat_avgs(ch_id, vs)]))
+
+		const overview = xs_overview(Object.values(ch_stat_avgs_map))
+		console.dir({ch_stat_avgs_overview: overview}, {depth: 7})
+
 		return
 
 		/*
@@ -190,6 +249,33 @@ async function main () {
 		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
 		console.log(xs_to_tsv(res))
 	}
+}
+
+const yt_dur_parse = str=> {
+	if (!str) return null
+	// PT11M26S
+	let ms = 0
+
+	const factor_map = {
+		S: 1000,
+		M: 1000*60,
+		H: 1000*60*60,
+		D: 1000*60*60*24,
+	}
+
+	const res = (''+str).replace(/^PT/, '').replace(/(\d+)(\w)/g, (_all, n, l)=> {
+		const f = factor_map[l]
+		if (!f) return _all
+		ms += parseInt(n, 10)*f
+		return ''
+	})
+
+	if (res.length) {
+		dlog.warn({at: 'yt_dur_parse.failed', str})
+		return null
+	}
+
+	return ms
 }
 
 
