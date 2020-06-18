@@ -4,6 +4,28 @@ const actions = {
 		return this.request({action: 'heartbeat'})
 	},
 
+	search_fuzzy ({q: _q}) {
+		// TODO: trim on api side
+		const q = (_q+'').trim()
+		if (!q) return Promise.resolve({list: []})
+		return this.request({action: 'channel.title | search.fuzzy', payload: {q}})
+	},
+
+	list_processors () { return this.request({action: 'queue.viz.processors.list'}) },
+	list_queued ({
+		count = 300,
+		cutoff_date = new Date('2020-06-15T20:01:17'),
+	} = {}) {
+		return this.request({action: 'queue.viz.queued.list', payload: {
+			count, cutoff_date: cutoff_date.toISOString()}})
+	},
+	queue_add_featured ({count = 1} = {}) {
+		return this.request({action: 'queue.add.channels.featured', payload: {count}})
+	},
+	queue_add_many_by_id ({xs = []} = {}) {
+		return this.request({action: 'queue.add.channels.by_id_once', payload: {xs}})
+	},
+
 }
 
 const api = {

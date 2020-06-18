@@ -15,9 +15,9 @@ export default {
 <style lang="stylus">
 
 // mixins
-.tasker .main
+.tasker > .main
 	overflow-x scroll
-	.content
+	&> .content
 		margin 50px auto
 		width 90%
 		max-width 1000px
