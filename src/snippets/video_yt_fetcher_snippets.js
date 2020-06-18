@@ -19,7 +19,7 @@ async function main () {
 
 	false && console.dir(await yt_api__i18n_regions())
 
-	if (true) {
+	if (false) {
 
 		const campaign_id = 'nordvpn_jun20'
 		const {out, missing} = await nordvpn_clean.call(this)
@@ -67,6 +67,21 @@ async function main () {
 			})
 	}
 
+	if (false) {
+		await this.neo4j_request_and_log(`
+		  match (:CampaignData)--(c:Channel_yt)
+		  where c.fetchedAt is null
+		  and not (c)<-[:has_node]-(:Queued)
+		  with c // order by rand() limit 10 // return c
+		  merge (c)<-[:has_node]-(q:Queued {created_at: datetime(), priority: 1.0})
+		  return count(c), count(q)
+		`)
+
+		// match (cd:CampaignData)--(x:Video) with cd, x match (x)--(m)--(c:Channel) optional match (c)--(q:Queued) return x, cd, c, m, q
+		// match (cd:CampaignData)--(x:Channel) with cd, x match (c)--(q:Queued) return x, cd, c, q
+	}
+
+
 
 	if (false) {
 		const d = await yt_api.videos({
@@ -77,6 +92,94 @@ async function main () {
 		// })
 		console.dir(d, {depth: 7})
 	}
+
+	if (false) {
+		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
+		const a = [...new Set(res.map(r=> r.ch_id))]
+		// console.log(a)
+
+		/*
+		Plan:
+		batch process: a
+		
+		with ['UC9VMz-llpSHTIfOzuggf5zA', 'UCzRE5sLT_nQQaxUCnADO0bQ'] as a
+		unwind a as ch_id
+		call apoc.cypher.doIt("
+			match (ch:Channel {id: ch_id})-[:has_uploads]->(:Playlist)-[:has_video]->(v:Video)
+			with ch, v order by v.published_at desc limit 10
+			return ch.id as ch_id, v.id as v_id
+		", {ch_id: ch_id}) yield value
+		return value.ch_id, value.v_id, value.v_d
+
+		// explore how many results per page / video_ids to send at max
+		// TODO: later add logic to detect if changed / total results > results on page
+		// use max count as batch process bucket size in prev
+		const d = await yt_api.videos({
+			video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
+			// also checkout the other .parts
+		})
+
+		send response for import/merge to db
+
+		modify campaign_extract_for_ml query to include + do arithmetic on last 10 vids where data is available
+
+		upload tsv file to slack
+		 */
+
+		return
+	}
+
+	if (true) {
+		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
+		console.log(xs_to_tsv(res))
+	}
+}
+
+const xs_to_tsv = (xs, {fields = Object.keys(xs[0])}={})=> {
+	const fix_line = xs=> xs.map(a=> (''+a).replace(/[\t\n]+/g, ' ')).join('\t')
+
+	let txt = ''
+	txt += fix_line(fields)+'\n'
+	for (const row of xs) {
+		txt += fix_line(fields.map(k=> row[k]))+'\n'
+	}
+
+	return txt
+}
+
+async function campaign_extract_for_ml ({campaign_id}) {
+	// post_id - unique identifies of the post
+	// ch_id - unique identifier of a particular channel,
+	// ch_name - the name of a particular channel,
+	// country - the influencer's country of origin,
+	// category - the category that best describes the channel's main topic,
+	// cvr - channel view rate (average views/subscribers for the last 10 posts posted)
+	// ldr - likes/dislikes ratio (average likes/dislikes for the last 10 posts posted)
+
+	const res = await this.neo4j_request(`
+		match (cp:Campaign {id: $campaign_id})
+		match (cp)--(cd:CampaignData)--(v:Video)
+		where v.title is not null
+		match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
+		where cp = cpp and chd.sales_from_fees is not null and ch.fetched_at is not null
+		return
+			v.id as post_id,
+			ch.id as ch_id,
+			chd.country_iso as country,
+			chd.category as category, // not normalized
+			ch.title as ch_name
+
+			// as cvr,
+			// as ldr
+
+			// cd.sales
+			// cd.cost, // assumes cd.currency is same
+			// chd.sales_from_fees
+			// chd.revenue
+
+			// ch.subscriber_count
+	`, {campaign_id})
+	return res
 }
 
 async function nordvpn_clean () {

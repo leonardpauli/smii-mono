@@ -24,6 +24,22 @@ const yt_api = {
 		})
 	},
 	videos ({video_ids}) { // cost: 1+(2+2+2)quota per page request (eg. if just one req (even if for 5 vid ids), only 7 in quota)
+		// https://developers.google.com/youtube/v3/docs/videos/list
+		/*
+		contentDetails: 2
+		fileDetails: 1
+		id: 0
+		liveStreamingDetails: 2
+		localizations: 2
+		player: 0
+		processingDetails: 1
+		recordingDetails: 2
+		snippet: 2
+		statistics: 2
+		status: 2
+		suggestions: 1
+		topicDetails: 2
+		 */
 		return this.req({
 			endpoint: '/videos',
 			part: ['snippet', 'contentDetails', 'statistics'],
