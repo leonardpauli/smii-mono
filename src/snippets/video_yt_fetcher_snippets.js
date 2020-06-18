@@ -111,10 +111,11 @@ async function main () {
 
 		tlog({at: 'channel_ids start'})
 
-		const channel_ids = await step({
-			id: 'channel_ids',
+		const {list: channel_ids, v: campaign_extract} = await step({
+			id: 'channel_ids.v1',
 			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id}),
-			parse: v=> [...new Set(v.map(r=> r.ch_id))],
+			parse: v=> ({v, list: [...new Set(v.map(r=> r.ch_id))]}),
+			log: (v)=> ({count: v.list.length}),
 		})
 
 		const video_ids = await step({
@@ -203,8 +204,31 @@ async function main () {
 		const ch_stat_avgs_map = Object.fromEntries([...by_channel]
 			.map(([ch_id, vs])=> [ch_id, prepare_channel_stat_avgs(ch_id, vs)]))
 
-		const overview = xs_overview(Object.values(ch_stat_avgs_map))
-		console.dir({ch_stat_avgs_overview: overview}, {depth: 7})
+		// const overview = xs_overview(Object.values(ch_stat_avgs_map))
+		// console.dir({ch_stat_avgs_overview: overview}, {depth: 7})
+
+		campaign_extract.map(c=> {
+			const stats = ch_stat_avgs_map[c.ch_id]
+			if (stats) {
+				Object.entries(stats).map(([k, v])=> {
+					c['ch_avg10_'+k] = v
+				})
+				c.ch_avg10_views_per_subs = stats.views/c.subscriber_count||null
+			}
+		})
+
+		// console.dir(campaign_extract)
+		// cvr
+		// ldr
+		const tsv = xs_to_tsv(campaign_extract, {fields: (
+			'post_id	ch_id	country	ch_avg10_likes_per_rates	ch_avg10_likes_per_views	ch_avg10_comments_per_views	ch_avg10_views'+
+			'	ch_avg10_duration	ch_avg10_views_per_subs	subscriber_count	sales	cost	ch_sales_from_fees	ch_revenue	category	ch_name').split('\t')})
+		// console.log(tsv)
+		const filename = './local/'+campaign_id+'.campaign_extract.v1.tsv'
+		await fs.promises.writeFile(filename, tsv)
+
+		tlog({at: 'wrote', filename, count: campaign_extract.length})
+
 
 		return
 
@@ -242,8 +266,8 @@ async function main () {
 		// })
 		// console.dir(d, {depth: 10})
 
-		return
 	}
+
 
 	if (false) {
 		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
@@ -325,17 +349,18 @@ async function campaign_extract_for_ml ({campaign_id}) {
 			ch.id as ch_id,
 			chd.country_iso as country,
 			chd.category as category, // not normalized
-			ch.title as ch_name
+			ch.title as ch_name,
+
+			ch.subscriber_count as subscriber_count,
 
 			// as cvr,
 			// as ldr
 
-			// cd.sales
-			// cd.cost, // assumes cd.currency is same
-			// chd.sales_from_fees
-			// chd.revenue
+			cd.sales as sales,
+			cd.cost as cost, // assumes cd.currency is same
+			chd.sales_from_fees as ch_sales_from_fees,
+			chd.revenue as ch_revenue
 
-			// ch.subscriber_count
 	`, {campaign_id})
 	return res
 }
