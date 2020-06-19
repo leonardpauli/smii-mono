@@ -74,10 +74,12 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 )
 `
 
+// TODO: potentially merge .slug + .slug_tmp nodes afterwards
+//  see https://stackoverflow.com/a/21504782/1054573
 const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n', set_other = false})=> `
 foreach(dummy in case when ${channel_raw}.id is not null then [1] else [] end |
   merge (cmm_id:Channel_yt {id: ${channel_raw}.id})
-  ${set_other?`set cmm_id.slug = ${channel_raw}.slug`:''}
+  ${set_other?`set cmm_id.slug_tmp = ${channel_raw}.slug`:''}
 )
 foreach(dummy in case when ${channel_raw}.slug is not null then [1] else [] end |
   merge (cmm_slug:Channel_yt {slug: ${channel_raw}.slug})
@@ -316,12 +318,14 @@ return
 `,
 
 
-['queue add channels by id once']: ({xs, priority = 1.0})=>
+['queue add channels once']: ({xs, priority = 1.0})=>
+// xs: [{id: '...'}, {slug: '...'}, ...]
 `
   with ${xs} as xs
   unwind xs as x
-  merge (c:Channel_yt {id: x})
-  with c
+  
+  ${channel_merge_match({channel_raw: 'x', c_var: 'c'})}
+
   optional match (c)<-[:has_node]-(pq:Queued)
   where pq.status is null or pq.status = 'taken'
   with c, count(pq) as pqc
