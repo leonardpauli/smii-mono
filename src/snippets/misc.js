@@ -1,18 +1,20 @@
 async function setup_constraints () {
+	// drop constraint channel_yt_slug_unique
 
-	// create constraint campaign_id_unique on (c:Campaign) assert c.id is unique
-	const unique_prop = (...args)=> this.neo4j_ensure_constraint_node_property_unique(...args)
-	await unique_prop('channel_id_unique', 'Channel', 'n.id')
-	// false && await unique_prop('channel_slug_unique', 'Channel', 'n.slug') // drop constraint channel_slug_unique
-	await unique_prop('channel_yt_id_unique', 'Channel_yt', 'n.id')
-	await unique_prop('channel_yt_slug_unique', 'Channel_yt', 'n.slug')
-	await unique_prop('channel_ig_slug_unique', 'Channel_ig', 'n.slug')
-	await unique_prop('playlist_id_unique', 'Playlist', 'n.id')
-	await unique_prop('video_id_unique', 'Video', 'n.id')
-	await unique_prop('country_yt_code', 'Country', 'n.yt_code')
-	// await unique_prop('keyword_title_unique', 'Keyword', 'n.title')
-	await unique_prop('processor_id_unique', 'Processor', 'n.id')
-	await unique_prop('campaign_id_unique', 'Campaign', 'n.id')
+	const unique = (...args)=> this.neo4j_ensure_constraint(...args)
+	const index = (...args)=> this.neo4j_ensure_index(...args)
+	
+	await unique('channel_id_unique', '(n:Channel) assert n.id is unique')
+	await unique('channel_yt_id_unique', '(n:Channel_yt) assert n.id is unique')
+	
+	await index('channel_yt_slug_index', '(n:Channel_yt) on (n.slug)')
+	await index('channel_ig_slug_index', '(n:Channel_ig) on (n.slug)')
+
+	await unique('playlist_id_unique', '(n:Playlist) assert n.id is unique')
+	await unique('video_id_unique', '(n:Video) assert n.id is unique')
+	await unique('country_yt_code', '(n:Country) assert n.yt_code is unique')
+	await unique('processor_id_unique', '(n:Processor) assert n.id is unique')
+	await unique('campaign_id_unique', '(n:Campaign) assert n.id is unique')
 
 }
 

@@ -18,17 +18,21 @@ const yt_channel_username_beneater = 'eaterbc'
 
 async function main () {
 
-	if (true) {
+	// TODO: (l:Log)--(q:Queued {status: 'failed'})--(c:Channel_yt) where c.fetched_at is not null detach delete l, q
+	// TODO: merge id + slug node, eg.
+	// 	error: Neo4jError: Node(5014713) already exists with label `Channel_yt` and property `slug` = 'fotoschnack'
+
+	if (false) {
 		const channels_to_fetch = await fs_json_file_read('./local/nordvpn_jun20.channels_to_fetch.json')
 		const channel_ids = channels_to_fetch.map(a=> a.id).filter(Boolean)
+		const channel_slugs = channels_to_fetch.filter(a=> a.slug)
 
 		const size = 10
-		let i = 5
-		// console.dir(channel_ids.slice(i*size, (i+1)*size))
-		// return
+		let i = 0
+		console.dir(channel_slugs.length)
 		await this.neo4j_request_and_log(
-			queries['queue add channels by id once']({xs: '$xs'}), {
-				xs: channel_ids.slice(i*size, (i+1)*size),
+			queries['queue add channels once']({xs: '$xs'}), {
+				xs: channel_slugs.slice(i*size, (i+1)*size),
 			})
 
 		return
@@ -125,14 +129,61 @@ async function main () {
 			return parsed
 		}
 
+		const videos_load = async (video_ids)=> {
+			const videos = []
+
+			const size = 50
+			let i=0, slice
+			do {
+				slice = video_ids.slice(i*size, (i+1)*size)
+				if (slice.length==0) break
+			
+				const items = await step({
+					id: 'yt_video_load.v4.'+i,
+					fn: ()=> yt_api.videos({video_ids: slice}),
+					parse: v=> v.data && v.data.items || [],
+					log: (_, v)=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
+				})
+
+				videos.push(...items)
+
+				i++
+			} while (true)
+			
+
+			const by_channel = xs_group(videos, {key_get: v=> v.snippet.channelId})
+			const by_video = {}; videos.map(v=> {by_video[v.id] = v})
+			// console.dir(by_channel, {depth: 2})
+
+			return {by_channel, by_video}
+		}
+
 
 		tlog({at: 'channel_ids start'})
+
+
+		const vid_w_sales = await step({
+			id: 'vid_entries_w_sales.v3',
+			fn: ()=> this.neo4j_request(`
+				match (cp:Campaign {id: $campaign_id})
+				match (cp)--(cd:CampaignData)--(v:Video)
+				// match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
+				where cd.sales is not null // and ch.fetched_at is not null
+				return v.id as v_id, case when v.title is null then false else true end as fetched
+			`, {campaign_id}),
+			parse: v=> ({
+				all: v.map(r=> r.v_id),
+				fetched: v.filter(r=> r.fetched).map(r=> r.v_id),
+				fetchednot: v.filter(r=> !r.fetched).map(r=> r.v_id),
+			}),
+			log: (v)=> obj_map_values(v, v=> v.length),
+		})
 
 		const {list: channel_ids, v: campaign_extract} = await step({
 			id: 'channel_ids.v1',
 			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id}),
 			parse: v=> ({v, list: [...new Set(v.map(r=> r.ch_id))]}),
-			log: (v)=> ({count: v.list.length}),
+			log: (v)=> ({channels: v.list.length, posts: v.v.length}),
 		})
 
 		const video_ids = await step({
@@ -140,6 +191,10 @@ async function main () {
 			fn: ()=> latest_video_ids_for_channels.call(this, {channel_ids, group_size: 10}),
 			parse: v=> v.map(a=> a.v_id),
 		})
+
+		// ensure latest + campaign posts are taken
+		campaign_extract.map(a=> a.post_id)
+			.forEach(a=> !video_ids.includes(a) && video_ids.push(a))
 
 		// // console.dir(video_ids.slice(2, 4))
 		// // return
@@ -150,30 +205,50 @@ async function main () {
 		// })
 		// console.dir(d, {depth: 8})
 		// return
-
-		const videos = []
-
-		const size = 50
-		let i=0, slice
-		do {
-			slice = video_ids.slice(i*size, (i+1)*size)
-			if (slice.length==0) break
 		
-			const items = await step({
-				id: 'yt_video_load.v4.'+i,
-				fn: ()=> yt_api.videos({video_ids: slice}),
-				parse: v=> v.data && v.data.items || [],
-				log: (_, v)=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
+
+		if (false) {
+			video_ids.push(...vid_w_sales.fetchednot)
+			const still_missing_2 = [
+				'l-C_367kkno', '7juLa6gqlag',
+				'iVSNIIuARRE', 'Df_FnXUtAqA',
+				'luiDm9DoMi8', '4RslRIW7vmw',
+				'H6leGvf6BeM', 'ek-w7Sk-UMI',
+				'RqnTkbfsvBg', 'tr5Qc8Zv6pU',
+				'AB6pnwdjphA', 'W-j71YB6HH4',
+				'6nh4bhXRzhg', 'wegxoNTw0_I',
+				'xEKu1UBlUE8', '47xCRy-7TWw',
+				'hibIJbNLLgA', '3c2wdDsaqkI',
+				'NBDaLK6EjwI', 'cjP6TCQHGxs',
+				'rhexnPq1Irw', 'hb8G7Su0IeM',
+				'8OS6bnz67UY', 'RhZBSbQaWdc',
+				'pX3tHaA8JnA', '5Cugm2Rh4eI',
+				'aIqhu8ctmFo', 'qgttZr_cjqU'
+			]
+			video_ids.push(...still_missing_2)
+
+			const {by_channel, by_video} = await videos_load(video_ids)
+
+			const still_missing = vid_w_sales.all
+				.map(id=> [id, by_video[id] && by_video[id].snippet.title?true:false])
+				.filter(a=> !a[1]).map(a=> a[0])
+			console.dir({still_missing})
+			if (still_missing.length) return
+
+			const chvs = vid_w_sales.all.map(id=> by_video[id])
+				.map(v=> ({id: v.id, ch_id: v.snippet.channelId}))
+			// console.dir(chvs)
+
+			await step({
+				id: 'chvs',
+				fn: ()=> Promise.resolve(chvs),
 			})
 
-			videos.push(...items)
+			return
+		}
 
-			i++
-		} while (true)
-		
-
-		const by_channel = xs_group(videos, {key_get: v=> v.snippet.channelId})
-		// console.dir(by_channel, {depth: 2})
+		const {by_channel, by_video} = await videos_load(video_ids)
+		return
 
 		const prepare_channel_stat_avgs = (ch_id, vs)=> {
 			// clean/parse
@@ -192,6 +267,7 @@ async function main () {
 			vs.forEach(v=> {
 				const {stats} = v
 				v.stats_calc = {
+					likes_per_dislikes: stats.likeCount/stats.dislikeCount || null,
 					likes_per_rates: stats.likeCount/(stats.likeCount+stats.dislikeCount) || null,
 					likes_per_views: stats.likeCount/stats.viewCount || null,
 					comments_per_views: stats.commentCount/stats.viewCount || null,
@@ -205,6 +281,7 @@ async function main () {
 				return xs_sum(ns)/ns.length
 			}
 			const stat_avgs = {
+				likes_per_dislikes: field_avg(vs, v=> v.stats_calc.likes_per_dislikes),
 				likes_per_rates: field_avg(vs, v=> v.stats_calc.likes_per_rates),
 				likes_per_views: field_avg(vs, v=> v.stats_calc.likes_per_views),
 				comments_per_views: field_avg(vs, v=> v.stats_calc.comments_per_views),
@@ -232,13 +309,20 @@ async function main () {
 				})
 				c.ch_avg10_views_per_subs = stats.views/c.subscriber_count||null
 			}
+			const vid = by_video[c.post_id]
+			if (vid) {
+				c.view_count = vid.stats.viewCount
+			}
+			if (!c.view_count) {
+				console.dir({pid: c.post_id, vid})
+			}
 		})
 
 		// console.dir(campaign_extract)
 		// cvr
 		// ldr
 		const tsv = xs_to_tsv(campaign_extract, {fields: (
-			'post_id	ch_id	country	ch_avg10_likes_per_rates	ch_avg10_likes_per_views	ch_avg10_comments_per_views	ch_avg10_views'+
+			'post_id	ch_id	country	view_count	ch_avg10_likes_per_dislikes	ch_avg10_likes_per_rates	ch_avg10_likes_per_views	ch_avg10_comments_per_views	ch_avg10_views'+
 			'	ch_avg10_duration	ch_avg10_views_per_subs	subscriber_count	sales	cost	ch_sales_from_fees	ch_revenue	category	ch_name').split('\t')})
 		// console.log(tsv)
 		const filename = './local/'+campaign_id+'.campaign_extract.v1.tsv'
@@ -346,7 +430,7 @@ async function latest_video_ids_for_channels ({channel_ids, group_size = 10}) {
 	return res
 }
 
-async function campaign_extract_for_ml ({campaign_id}) {
+async function campaign_extract_for_ml ({campaign_id, by_video = false}) {
 	// post_id - unique identifies of the post
 	// ch_id - unique identifier of a particular channel,
 	// ch_name - the name of a particular channel,
@@ -360,7 +444,7 @@ async function campaign_extract_for_ml ({campaign_id}) {
 		match (cp)--(cd:CampaignData)--(v:Video)
 		where v.title is not null
 		match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
-		where cp = cpp and chd.sales_from_fees is not null and ch.fetched_at is not null
+		where cp = cpp and cd.sales is not null and ch.fetched_at is not null
 		return
 			v.id as post_id,
 			ch.id as ch_id,
@@ -588,7 +672,7 @@ const yt_api__channel_url_parse = str=> {
 const yt_api__video_url_parse = str=> {
 	// https://www.youtube.com/watch?v=8OS6bnz67UY&t=117s
 	// https://youtu.be/BTcQlBnKouM
-	const yt_url_parse_regex = /(www\.)?(youtube\.com\/watch\?([^#]+)|youtu\.be\/([^?\/#]+))/
+	const yt_url_parse_regex = /(www\.)?(youtube\.com\/watch\?([^#\/]+)|youtu\.be\/([^?\/#]+))/
 	const m = str.match(yt_url_parse_regex)
 	if (!m) return null
 	const [_all, _www, _or, qs, id] = m

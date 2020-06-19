@@ -23,11 +23,23 @@ const fragment = {
 		console.dir(res, {depth: 5})
 	},
 
-	async neo4j_ensure_constraint_node_property_unique (name, label, what='n.id') {
-		const query = `create constraint ${name} on (n:${label}) assert ${what} is unique`
+	async neo4j_ensure_constraint (name, what) {
+		// create constraint my_labelname_property_name_unique on (n:LabelName) assert n.property_name is unique
+		// drop constraint my_labelname_property_name_unique
+		const query = `create constraint ${name} on ${what}`
 		const res = await this.neo4j_request(query)
 			.catch(catch_allow_code('Neo.ClientError.Schema.EquivalentSchemaRuleAlreadyExists'))
-		dlog.time({at: 'neo4j_ensure_constraint_node_property_unique', name, res: res===null?'existing':'created'})
+		dlog.time({at: 'neo4j_ensure_constraint', name, res: res===null?'existing':'created'})
+	},
+
+	async neo4j_ensure_index (name, what) {
+		// https://neo4j.com/docs/cypher-manual/current/administration/indexes-for-search-performance/index.html
+		// create index my_labelname_property_index for (n:LabelName) on (n.property_name1, n.property_name2, ...) // eg. if composit
+		// CALL db.indexes
+		const query = `create index ${name} for ${what}`
+		const res = await this.neo4j_request(query)
+			.catch(catch_allow_code('Neo.ClientError.Schema.EquivalentSchemaRuleAlreadyExists'))
+		dlog.time({at: 'neo4j_ensure_index', name, res: res===null?'existing':'created'})
 	},
 
 	async neo4j_batch_process_all_nodes ({

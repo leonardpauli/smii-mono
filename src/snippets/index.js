@@ -1,4 +1,4 @@
-const enabled = false
+const enabled = true
 
 async function main () {
 	// await require('./misc.js').setup_constraints.call(this)
