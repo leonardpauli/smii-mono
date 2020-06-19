@@ -74,12 +74,14 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 )
 `
 
-const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n'})=> `
+const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n', set_other = false})=> `
 foreach(dummy in case when ${channel_raw}.id is not null then [1] else [] end |
-  merge (:Channel_yt {id: ${channel_raw}.id})
+  merge (cmm_id:Channel_yt {id: ${channel_raw}.id})
+  ${set_other?`set cmm_id.slug = ${channel_raw}.slug`:''}
 )
 foreach(dummy in case when ${channel_raw}.slug is not null then [1] else [] end |
-  merge (:Channel_yt {slug: ${channel_raw}.slug})
+  merge (cmm_slug:Channel_yt {slug: ${channel_raw}.slug})
+  ${set_other?`set cmm_slug.id = ${channel_raw}.id`:''}
 )
 with ${channel_raw}${with_add}
 match (${c_var}:Channel_yt)
@@ -164,13 +166,11 @@ return count(distinct v), count(distinct cd), count(distinct campaign)
 `
 
 const channel_import = ({channel_raw, with_add = ''})=> `
-${channel_merge_match({channel_raw, with_add, c_var: 'n'})}
+${channel_merge_match({channel_raw, with_add, c_var: 'n', set_other: true})}
 
 set
   n :Channel,
   n += ${channel_raw}.rest,
-  
-  n.slug = ${channel_raw}.slug,
 
   n.published_at = case when ${channel_raw}.published_at is null then null else datetime(${channel_raw}.published_at) end,
   n.fetched_at = case when ${channel_raw}.fetched_at is null then null else datetime(${channel_raw}.fetched_at) end,
