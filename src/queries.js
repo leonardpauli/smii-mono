@@ -83,7 +83,7 @@ foreach(dummy in case when ${channel_raw}.id is not null then [1] else [] end |
 )
 foreach(dummy in case when ${channel_raw}.slug is not null then [1] else [] end |
   merge (cmm_slug:Channel_yt {slug: ${channel_raw}.slug})
-  ${set_other?`set cmm_slug.id = ${channel_raw}.id`:''}
+  ${set_other?`set cmm_slug.id_tmp = ${channel_raw}.id`:''}
 )
 with ${channel_raw}${with_add}
 match (${c_var}:Channel_yt)
