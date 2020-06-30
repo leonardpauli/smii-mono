@@ -14,6 +14,13 @@ const yt_api = {
 			...query,
 		})
 	},
+	channel_id_by_username ({username}) { // quota: 1+0
+		return this.req({
+			endpoint: '/channels',
+			part: ['id'],
+			forUsername: username,
+		})
+	},
 	search ({channelId, maxResults = 20}) { // quota: 100 !!!
 		return this.req({
 			endpoint: '/search',

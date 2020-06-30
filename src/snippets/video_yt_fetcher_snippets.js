@@ -18,6 +18,19 @@ const yt_channel_username_beneater = 'eaterbc'
 
 async function main () {
 
+	if (false) {
+		const d = await yt_api.channel_by_username({
+			username: 'TheFerp2000',
+		})
+		// const d = await yt_api.channels_by_ids({
+		// 	ids: [yt_channel_id_linustechtips],
+		// })
+		console.dir(d, {depth: 7})
+		return
+	}
+
+	if (true) return merge_slug_fix.call(this)
+
 	// TODO: (l:Log)--(q:Queued {status: 'failed'})--(c:Channel_yt) where c.fetched_at is not null detach delete l, q
 	// TODO: merge id + slug node, eg.
 	// 	error: Neo4jError: Node(5014713) already exists with label `Channel_yt` and property `slug` = 'fotoschnack'
@@ -117,17 +130,7 @@ async function main () {
 
 	if (true) {
 		const campaign_id = 'nordvpn_jun20'
-
-		const tlog = ({at, ...rest})=> dlog.time({at: campaign_id+'.'+at, ...rest})
-		const step = async ({id, fn, parse = v=> v, log = (v, _res)=> ({count: v.length})})=> {
-			const res = await json_cache_use({
-				id: campaign_id+'.'+id,
-				fn,
-			})
-			const parsed = parse(res)
-			tlog({at: id, ...log(parsed, res)})
-			return parsed
-		}
+		const {step, tlog} = step_get({prefix: campaign_id})
 
 		const videos_load = async (video_ids)=> {
 			const videos = []
@@ -161,6 +164,7 @@ async function main () {
 
 		tlog({at: 'channel_ids start'})
 
+		// NOTE: this is WIP code, uses accidental local state
 
 		const vid_w_sales = await step({
 			id: 'vid_entries_w_sales.v3',
@@ -179,12 +183,22 @@ async function main () {
 			log: (v)=> obj_map_values(v, v=> v.length),
 		})
 
+		const chvs = await step({
+			id: 'chvs',
+			fn: ()=> Promise.resolve(chvs),
+		})
+
+		// const res = await campaign_extract_for_ml.call(this, {campaign_id, chvs})
+		// console.dir(res)
+		// return
+
 		const {list: channel_ids, v: campaign_extract} = await step({
-			id: 'channel_ids.v1',
-			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id}),
+			id: 'channel_ids.v3',
+			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id, chvs}),
 			parse: v=> ({v, list: [...new Set(v.map(r=> r.ch_id))]}),
 			log: (v)=> ({channels: v.list.length, posts: v.v.length}),
 		})
+
 
 		const video_ids = await step({
 			id: 'video_ids',
@@ -248,7 +262,7 @@ async function main () {
 		}
 
 		const {by_channel, by_video} = await videos_load(video_ids)
-		return
+		// return
 
 		const prepare_channel_stat_avgs = (ch_id, vs)=> {
 			// clean/parse
@@ -314,6 +328,7 @@ async function main () {
 				c.view_count = vid.stats.viewCount
 			}
 			if (!c.view_count) {
+				// wo view_count
 				console.dir({pid: c.post_id, vid})
 			}
 		})
@@ -376,6 +391,97 @@ async function main () {
 	}
 }
 
+async function merge_slug_fix () {
+	// merge slug fix
+	const {step, tlog} = step_get({prefix: 'slug_merge_fix_jun30'})
+
+	const cid_get = ({slug})=> step({
+		id: 'yt_api.cid_get.'+slug,
+		fn: ()=> yt_api.channel_id_by_username({
+			username: slug,
+		}),
+		parse: v=> v.data && v.data.items && v.data.items[0] && v.data.items[0].id || null,
+		log: (id, res)=> id? ({id}): ({id, res}),
+	})
+
+	// const a = await cid_get({slug: 'BeginnersTech0000022_non_existing'}) // -> null; BeginnersTech -> "...id..."
+	// console.dir({a})
+	// return
+
+	const unmerged_slugs = await step({
+		clear_cache: true,
+		id: 'unmerged_empty_slugs',
+		fn: ()=> this.neo4j_request(`
+			match (s:Slug)-->(c:Channel_yt)--(q:Queued)
+			where c.fetched_at is null and q.finished_at is not null and q.status <> "failed"
+			with s, q order by q.finished_at asc // skip 49+37+35+6 limit 100
+			return collect(s.id) as res
+		`),
+		parse: v=> v[0].res,
+	})
+
+	const slug_id_combos = []
+	for (const slug of unmerged_slugs) {
+		const id = await cid_get({slug})
+		if (id)
+			slug_id_combos.push({slug, id})
+	}
+
+	console.dir({slug_id_combos})
+	return
+
+	// unwind [
+	// 	{slug: 'TheFerp2000', id: 'UCH56meGKL4Tzo1wvhsfnJxg'},
+	// 	{slug: 'BeginnersTech', id: 'UCTkMl64iMrMFpUO9a0WTmCw'}
+	// ] as x
+
+	const merged = await step({
+		clear_cache: true,
+		id: 'refactor_merged',
+		fn: ()=> this.neo4j_request(`
+			unwind $xs as x
+			match
+				(s:Slug {id: x.slug})-[r:has_channel]->(c_placeholder:Channel_yt)--(q:Queued),
+				(c:Channel_yt {id: x.id})
+			optional match (c)<-[rr:has_channel]-(ss:Slug)
+			set
+				rr.fetched_at = c.fetched_at,
+				r.fetched_at = datetime("20200601"),
+				r.fetched_at_is_placeholder = true
+			with r, c_placeholder, c, x
+			return x.slug as slug, c.id as id
+			// return *
+			// mergeNodes: last wins
+			// CALL apoc.refactor.mergeNodes([c_placeholder, c], {\`.*\`: 'overwrite'})
+			// YIELD node
+			// return x.slug as slug, node.id as id
+		`, {xs: slug_id_combos}),
+	})
+
+	const merged_slugs = new Set(merged.map(a=> a.slug))
+	const unmerged = unmerged_slugs.filter(a=> !merged_slugs.has(a))
+	console.dir({
+		merged_count: merged.length,
+		unmerged_count: unmerged.length,
+		unmerged,
+	})
+}
+
+const step_get = ({prefix})=> {
+	const tlog = ({at, ...rest})=> dlog.time({at: prefix+'.'+at, ...rest})
+	const step = async ({id, fn, parse = v=> v, log = (v, _res)=> ({count: v.length}), clear_cache = false})=> {
+		const res = await json_cache_use({
+			id: prefix+'.'+id,
+			fn,
+			clear_cache,
+		})
+		const parsed = parse(res)
+		tlog({at: id, ...log(parsed, res)})
+		return parsed
+	}
+	return {step, tlog}
+}
+
 const yt_dur_parse = str=> {
 	if (!str) return null
 	// PT11M26S
@@ -430,7 +536,9 @@ async function latest_video_ids_for_channels ({channel_ids, group_size = 10}) {
 	return res
 }
 
-async function campaign_extract_for_ml ({campaign_id, by_video = false}) {
+async function campaign_extract_for_ml ({campaign_id, chvs = null}) {
+	// chvs: [{id: '', ch_id: ''}, ...] // if provided, use it instead of all connected from campaign
+
 	// post_id - unique identifies of the post
 	// ch_id - unique identifier of a particular channel,
 	// ch_name - the name of a particular channel,
@@ -439,12 +547,7 @@ async function campaign_extract_for_ml ({campaign_id, by_video = false}) {
 	// cvr - channel view rate (average views/subscribers for the last 10 posts posted)
 	// ldr - likes/dislikes ratio (average likes/dislikes for the last 10 posts posted)
 
-	const res = await this.neo4j_request(`
-		match (cp:Campaign {id: $campaign_id})
-		match (cp)--(cd:CampaignData)--(v:Video)
-		where v.title is not null
-		match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
-		where cp = cpp and cd.sales is not null and ch.fetched_at is not null
+	const retq = `
 		return
 			v.id as post_id,
 			ch.id as ch_id,
@@ -461,9 +564,55 @@ async function campaign_extract_for_ml ({campaign_id, by_video = false}) {
 			cd.cost as cost, // assumes cd.currency is same
 			chd.sales_from_fees as ch_sales_from_fees,
 			chd.revenue as ch_revenue
+	`
 
+	if (true) return await this.neo4j_request(`
+		match (cp:Campaign {id: $campaign_id})
+		unwind $chvs as chv
+		match (cp)--(cd:CampaignData)--(v:Video {id: chv.id})
+		match (ch:Channel_yt {id: chv.ch_id})
+		match (ch)--(chd:CampaignData)
+		where cd.sales is not null and ch.fetched_at is not null
+		// return count(cd), count(chd) // chv.ch_id as ch_id, chv.id as id
+
+		${retq}
+	`, {campaign_id, chvs})
+
+	return await this.neo4j_request(`
+		match (cp:Campaign {id: $campaign_id})
+		unwind $chvs as chv
+		match (cp)--(cd:CampaignData)--(v:Video {id: chv.id})
+		match (ch:Channel_yt {id: chv.ch_id})
+		where not exists {match (ch)--(chd:CampaignData)--(cpp:Campaign) }
+		return count(cd) // chv.ch_id as ch_id, chv.id as id
+
+		// match (ch:Channel {id: chv.ch_id})--(chd:CampaignData)--(cpp:Campaign)
+		// where cp = cpp and cd.sales is not null and ch.fetched_at is not null
+		
+	`, {campaign_id, chvs})
+
+	if (chvs) {
+		return await this.neo4j_request(`
+			match (cp:Campaign {id: $campaign_id})
+			unwind $chvs as chv
+			match (cp)--(cd:CampaignData)--(v:Video {id: chv.id})
+			where v.title is not null
+			match (ch:Channel {id: chv.ch_id})--(chd:CampaignData)--(cpp:Campaign)
+			where cp = cpp and cd.sales is not null and ch.fetched_at is not null
+			
+			${retq}
+		`, {campaign_id, chvs})
+	}
+
+	return await this.neo4j_request(`
+		match (cp:Campaign {id: $campaign_id})
+		match (cp)--(cd:CampaignData)--(v:Video)
+		where v.title is not null
+		match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
+		where cp = cpp and cd.sales is not null and ch.fetched_at is not null
+
+		${retq}
 	`, {campaign_id})
-	return res
 }
 
 async function nordvpn_clean () {
@@ -639,11 +788,14 @@ const cache_dir_get = async ()=> {
 		: (cache_dir_path_loaded = await fs_dir_ensure_full('./local/cache'))
 }
 
-const json_cache_use = async ({id, fn})=> {
+const json_cache_use = async ({id, fn, clear_cache = false})=> {
 	// TODO: ensure id is valid filename (chars + length, or just use fs to check) + use path.join
-	const cachefile = `${await cache_dir_get()}/${id}.json`
-	const cache = await fs_json_file_read(cachefile)
-	if (cache) return cache
+	// TODO: do filename mangling separately to ensure no unexpected collisions
+	const cachefile = `${await cache_dir_get()}/${encodeURIComponent(''+id).trim().slice(0,250)}.json`
+	if (!clear_cache) {
+		const cache = await fs_json_file_read(cachefile)
+		if (cache) return cache
+	}
 
 	const d = await fn()
 	await fs.promises.writeFile(cachefile, JSON.stringify(d))
