@@ -29,7 +29,8 @@ async function main () {
 		return
 	}
 
-	if (true) return merge_slug_fix.call(this)
+	if (false) return merge_slug_fix.call(this)
+	if (false) return campaign_import_jun20_tmp.call(this)
 
 	// TODO: (l:Log)--(q:Queued {status: 'failed'})--(c:Channel_yt) where c.fetched_at is not null detach delete l, q
 	// TODO: merge id + slug node, eg.
@@ -128,268 +129,269 @@ async function main () {
 		console.dir(d, {depth: 7})
 	}
 
-	if (true) {
-		const campaign_id = 'nordvpn_jun20'
-		const {step, tlog} = step_get({prefix: campaign_id})
-
-		const videos_load = async (video_ids)=> {
-			const videos = []
-
-			const size = 50
-			let i=0, slice
-			do {
-				slice = video_ids.slice(i*size, (i+1)*size)
-				if (slice.length==0) break
-			
-				const items = await step({
-					id: 'yt_video_load.v4.'+i,
-					fn: ()=> yt_api.videos({video_ids: slice}),
-					parse: v=> v.data && v.data.items || [],
-					log: (_, v)=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
-				})
-
-				videos.push(...items)
-
-				i++
-			} while (true)
-			
-
-			const by_channel = xs_group(videos, {key_get: v=> v.snippet.channelId})
-			const by_video = {}; videos.map(v=> {by_video[v.id] = v})
-			// console.dir(by_channel, {depth: 2})
-
-			return {by_channel, by_video}
-		}
-
-
-		tlog({at: 'channel_ids start'})
-
-		// NOTE: this is WIP code, uses accidental local state
-
-		const vid_w_sales = await step({
-			id: 'vid_entries_w_sales.v3',
-			fn: ()=> this.neo4j_request(`
-				match (cp:Campaign {id: $campaign_id})
-				match (cp)--(cd:CampaignData)--(v:Video)
-				// match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
-				where cd.sales is not null // and ch.fetched_at is not null
-				return v.id as v_id, case when v.title is null then false else true end as fetched
-			`, {campaign_id}),
-			parse: v=> ({
-				all: v.map(r=> r.v_id),
-				fetched: v.filter(r=> r.fetched).map(r=> r.v_id),
-				fetchednot: v.filter(r=> !r.fetched).map(r=> r.v_id),
-			}),
-			log: (v)=> obj_map_values(v, v=> v.length),
-		})
-
-		const chvs = await step({
-			id: 'chvs',
-			fn: ()=> Promise.resolve(chvs),
-		})
-
-		// const res = await campaign_extract_for_ml.call(this, {campaign_id, chvs})
-		// console.dir(res)
-		// return
-
-		const {list: channel_ids, v: campaign_extract} = await step({
-			id: 'channel_ids.v3',
-			fn: ()=> campaign_extract_for_ml.call(this, {campaign_id, chvs}),
-			parse: v=> ({v, list: [...new Set(v.map(r=> r.ch_id))]}),
-			log: (v)=> ({channels: v.list.length, posts: v.v.length}),
-		})
-
-
-		const video_ids = await step({
-			id: 'video_ids',
-			fn: ()=> latest_video_ids_for_channels.call(this, {channel_ids, group_size: 10}),
-			parse: v=> v.map(a=> a.v_id),
-		})
-
-		// ensure latest + campaign posts are taken
-		campaign_extract.map(a=> a.post_id)
-			.forEach(a=> !video_ids.includes(a) && video_ids.push(a))
-
-		// // console.dir(video_ids.slice(2, 4))
-		// // return
-
-		// const d = await yt_api.videos({
-		// 	video_ids: video_ids.slice(0, 100), // ['H7wx-35QSUM', 'Tp--FkiHyes'], // ['AjWRjVYA0PY', 'huKsSliDD3A'],
-		// 	// also checkout the other .parts
-		// })
-		// console.dir(d, {depth: 8})
-		// return
-		
-
-		if (false) {
-			video_ids.push(...vid_w_sales.fetchednot)
-			const still_missing_2 = [
-				'l-C_367kkno', '7juLa6gqlag',
-				'iVSNIIuARRE', 'Df_FnXUtAqA',
-				'luiDm9DoMi8', '4RslRIW7vmw',
-				'H6leGvf6BeM', 'ek-w7Sk-UMI',
-				'RqnTkbfsvBg', 'tr5Qc8Zv6pU',
-				'AB6pnwdjphA', 'W-j71YB6HH4',
-				'6nh4bhXRzhg', 'wegxoNTw0_I',
-				'xEKu1UBlUE8', '47xCRy-7TWw',
-				'hibIJbNLLgA', '3c2wdDsaqkI',
-				'NBDaLK6EjwI', 'cjP6TCQHGxs',
-				'rhexnPq1Irw', 'hb8G7Su0IeM',
-				'8OS6bnz67UY', 'RhZBSbQaWdc',
-				'pX3tHaA8JnA', '5Cugm2Rh4eI',
-				'aIqhu8ctmFo', 'qgttZr_cjqU'
-			]
-			video_ids.push(...still_missing_2)
-
-			const {by_channel, by_video} = await videos_load(video_ids)
-
-			const still_missing = vid_w_sales.all
-				.map(id=> [id, by_video[id] && by_video[id].snippet.title?true:false])
-				.filter(a=> !a[1]).map(a=> a[0])
-			console.dir({still_missing})
-			if (still_missing.length) return
-
-			const chvs = vid_w_sales.all.map(id=> by_video[id])
-				.map(v=> ({id: v.id, ch_id: v.snippet.channelId}))
-			// console.dir(chvs)
-
-			await step({
-				id: 'chvs',
-				fn: ()=> Promise.resolve(chvs),
-			})
-
-			return
-		}
-
-		const {by_channel, by_video} = await videos_load(video_ids)
-		// return
-
-		const prepare_channel_stat_avgs = (ch_id, vs)=> {
-			// clean/parse
-			vs.forEach(v=> {
-				if (v.statistics) {
-					v.stats = obj_map_values(v.statistics, v=> v*1)
-					delete v.statistics
-				} else {v.stats = {}}
-				if (v.contentDetails) {
-					v.stats.duration = yt_dur_parse(v.contentDetails.duration)
-					delete v.contentDetails.duration
-				}
-			})
-
-			// extract
-			vs.forEach(v=> {
-				const {stats} = v
-				v.stats_calc = {
-					likes_per_dislikes: stats.likeCount/stats.dislikeCount || null,
-					likes_per_rates: stats.likeCount/(stats.likeCount+stats.dislikeCount) || null,
-					likes_per_views: stats.likeCount/stats.viewCount || null,
-					comments_per_views: stats.commentCount/stats.viewCount || null,
-					duration: stats.duration || null,
-				}
-			})
-
-			const field_avg = (xs, vget = v=> v)=> {
-				const vs = xs.map(vget)
-				const ns = vs.filter(v=> typeof v==='number')
-				return xs_sum(ns)/ns.length
-			}
-			const stat_avgs = {
-				likes_per_dislikes: field_avg(vs, v=> v.stats_calc.likes_per_dislikes),
-				likes_per_rates: field_avg(vs, v=> v.stats_calc.likes_per_rates),
-				likes_per_views: field_avg(vs, v=> v.stats_calc.likes_per_views),
-				comments_per_views: field_avg(vs, v=> v.stats_calc.comments_per_views),
-				duration: field_avg(vs, v=> v.stats_calc.duration),
-				views: field_avg(vs, v=> v.stats.viewCount),
-			}
-
-			// const overview = xs_overview(vs_stats, {unwrap: true, string_map: v=> v.slice(0, 50)})
-			// console.dir({ch_id, stat_avgs}, {depth: 7})
-			// return
-			return stat_avgs
-		}
-
-		const ch_stat_avgs_map = Object.fromEntries([...by_channel]
-			.map(([ch_id, vs])=> [ch_id, prepare_channel_stat_avgs(ch_id, vs)]))
-
-		// const overview = xs_overview(Object.values(ch_stat_avgs_map))
-		// console.dir({ch_stat_avgs_overview: overview}, {depth: 7})
-
-		campaign_extract.map(c=> {
-			const stats = ch_stat_avgs_map[c.ch_id]
-			if (stats) {
-				Object.entries(stats).map(([k, v])=> {
-					c['ch_avg10_'+k] = v
-				})
-				c.ch_avg10_views_per_subs = stats.views/c.subscriber_count||null
-			}
-			const vid = by_video[c.post_id]
-			if (vid) {
-				c.view_count = vid.stats.viewCount
-			}
-			if (!c.view_count) {
-				// wo view_count
-				console.dir({pid: c.post_id, vid})
-			}
-		})
-
-		// console.dir(campaign_extract)
-		// cvr
-		// ldr
-		const tsv = xs_to_tsv(campaign_extract, {fields: (
-			'post_id	ch_id	country	view_count	ch_avg10_likes_per_dislikes	ch_avg10_likes_per_rates	ch_avg10_likes_per_views	ch_avg10_comments_per_views	ch_avg10_views'+
-			'	ch_avg10_duration	ch_avg10_views_per_subs	subscriber_count	sales	cost	ch_sales_from_fees	ch_revenue	category	ch_name').split('\t')})
-		// console.log(tsv)
-		const filename = './local/'+campaign_id+'.campaign_extract.v1.tsv'
-		await fs.promises.writeFile(filename, tsv)
-
-		tlog({at: 'wrote', filename, count: campaign_extract.length})
-
-
-		return
-
-		/*
-		Plan:
-		batch process: a
-		
-		with ['UC9VMz-llpSHTIfOzuggf5zA', 'UCzRE5sLT_nQQaxUCnADO0bQ'] as a
-		unwind a as ch_id
-		call apoc.cypher.doIt("
-			match (ch:Channel {id: ch_id})-[:has_uploads]->(:Playlist)-[:has_video]->(v:Video)
-			with ch, v order by v.published_at desc limit 10
-			return ch.id as ch_id, v.id as v_id
-		", {ch_id: ch_id}) yield value
-		return value.ch_id, value.v_id, value.v_d
-
-		// explore how many results per page / video_ids to send at max
-		// TODO: later add logic to detect if changed / total results > results on page
-		// use max count as batch process bucket size in prev
-		const d = await yt_api.videos({
-			video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
-			// also checkout the other .parts
-		})
-
-		send response for import/merge to db
-
-		modify campaign_extract_for_ml query to include + do arithmetic on last 10 vids where data is available
-
-		upload tsv file to slack
-		 */
-		
-		// const d = await yt_api.videos({
-		// 	video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
-		// 	// also checkout the other .parts
-		// })
-		// console.dir(d, {depth: 10})
-
-	}
-
-
 	if (false) {
 		const res = await campaign_extract_for_ml.call(this, {campaign_id: 'nordvpn_jun20'})
 		console.log(xs_to_tsv(res))
 	}
+
 }
+
+async function campaign_import_jun20_tmp ()  {
+	const campaign_id = 'nordvpn_jun20'
+	const {step, tlog} = step_get({prefix: campaign_id})
+
+	const videos_load = async (video_ids)=> {
+		const videos = []
+
+		const size = 50
+		let i=0, slice
+		do {
+			slice = video_ids.slice(i*size, (i+1)*size)
+			if (slice.length==0) break
+		
+			const items = await step({
+				id: 'yt_video_load.v4.'+i,
+				fn: ()=> yt_api.videos({video_ids: slice}),
+				parse: v=> v.data && v.data.items || [],
+				log: (_, v)=> v.data && ({page_info: v.data.pageInfo, date: v.date}),
+			})
+
+			videos.push(...items)
+
+			i++
+		} while (true)
+		
+
+		const by_channel = xs_group(videos, {key_get: v=> v.snippet.channelId})
+		const by_video = {}; videos.map(v=> {by_video[v.id] = v})
+		// console.dir(by_channel, {depth: 2})
+
+		return {by_channel, by_video}
+	}
+
+
+	tlog({at: 'channel_ids start'})
+
+	// NOTE: this is WIP code, uses accidental local state
+
+	const vid_w_sales = await step({
+		id: 'vid_entries_w_sales.v3',
+		fn: ()=> this.neo4j_request(`
+			match (cp:Campaign {id: $campaign_id})
+			match (cp)--(cd:CampaignData)--(v:Video)
+			// match (v)--(:Playlist)<-[:has_uploads]-(ch:Channel)--(chd:CampaignData)--(cpp:Campaign)
+			where cd.sales is not null // and ch.fetched_at is not null
+			return v.id as v_id, case when v.title is null then false else true end as fetched
+		`, {campaign_id}),
+		parse: v=> ({
+			all: v.map(r=> r.v_id),
+			fetched: v.filter(r=> r.fetched).map(r=> r.v_id),
+			fetchednot: v.filter(r=> !r.fetched).map(r=> r.v_id),
+		}),
+		log: (v)=> obj_map_values(v, v=> v.length),
+	})
+
+	const chvs = await step({
+		id: 'chvs',
+		fn: ()=> Promise.resolve(chvs),
+	})
+
+	// const res = await campaign_extract_for_ml.call(this, {campaign_id, chvs})
+	// console.dir(res)
+	// return
+
+	const {list: channel_ids, v: campaign_extract} = await step({
+		id: 'channel_ids.v3',
+		fn: ()=> campaign_extract_for_ml.call(this, {campaign_id, chvs}),
+		parse: v=> ({v, list: [...new Set(v.map(r=> r.ch_id))]}),
+		log: (v)=> ({channels: v.list.length, posts: v.v.length}),
+	})
+
+
+	const video_ids = await step({
+		id: 'video_ids',
+		fn: ()=> latest_video_ids_for_channels.call(this, {channel_ids, group_size: 10}),
+		parse: v=> v.map(a=> a.v_id),
+	})
+
+	// ensure latest + campaign posts are taken
+	campaign_extract.map(a=> a.post_id)
+		.forEach(a=> !video_ids.includes(a) && video_ids.push(a))
+
+	// // console.dir(video_ids.slice(2, 4))
+	// // return
+
+	// const d = await yt_api.videos({
+	// 	video_ids: video_ids.slice(0, 100), // ['H7wx-35QSUM', 'Tp--FkiHyes'], // ['AjWRjVYA0PY', 'huKsSliDD3A'],
+	// 	// also checkout the other .parts
+	// })
+	// console.dir(d, {depth: 8})
+	// return
+	
+
+	if (false) {
+		video_ids.push(...vid_w_sales.fetchednot)
+		const still_missing_2 = [
+			'l-C_367kkno', '7juLa6gqlag',
+			'iVSNIIuARRE', 'Df_FnXUtAqA',
+			'luiDm9DoMi8', '4RslRIW7vmw',
+			'H6leGvf6BeM', 'ek-w7Sk-UMI',
+			'RqnTkbfsvBg', 'tr5Qc8Zv6pU',
+			'AB6pnwdjphA', 'W-j71YB6HH4',
+			'6nh4bhXRzhg', 'wegxoNTw0_I',
+			'xEKu1UBlUE8', '47xCRy-7TWw',
+			'hibIJbNLLgA', '3c2wdDsaqkI',
+			'NBDaLK6EjwI', 'cjP6TCQHGxs',
+			'rhexnPq1Irw', 'hb8G7Su0IeM',
+			'8OS6bnz67UY', 'RhZBSbQaWdc',
+			'pX3tHaA8JnA', '5Cugm2Rh4eI',
+			'aIqhu8ctmFo', 'qgttZr_cjqU'
+		]
+		video_ids.push(...still_missing_2)
+
+		const {by_channel, by_video} = await videos_load(video_ids)
+
+		const still_missing = vid_w_sales.all
+			.map(id=> [id, by_video[id] && by_video[id].snippet.title?true:false])
+			.filter(a=> !a[1]).map(a=> a[0])
+		console.dir({still_missing})
+		if (still_missing.length) return
+
+		const chvs = vid_w_sales.all.map(id=> by_video[id])
+			.map(v=> ({id: v.id, ch_id: v.snippet.channelId}))
+		// console.dir(chvs)
+
+		await step({
+			id: 'chvs',
+			fn: ()=> Promise.resolve(chvs),
+		})
+
+		return
+	}
+
+	const {by_channel, by_video} = await videos_load(video_ids)
+	// return
+
+	const prepare_channel_stat_avgs = (ch_id, vs)=> {
+		// clean/parse
+		vs.forEach(v=> {
+			if (v.statistics) {
+				v.stats = obj_map_values(v.statistics, v=> v*1)
+				delete v.statistics
+			} else {v.stats = {}}
+			if (v.contentDetails) {
+				v.stats.duration = yt_dur_parse(v.contentDetails.duration)
+				delete v.contentDetails.duration
+			}
+		})
+
+		// extract
+		vs.forEach(v=> {
+			const {stats} = v
+			v.stats_calc = {
+				likes_per_dislikes: stats.likeCount/stats.dislikeCount || null,
+				likes_per_rates: stats.likeCount/(stats.likeCount+stats.dislikeCount) || null,
+				likes_per_views: stats.likeCount/stats.viewCount || null,
+				comments_per_views: stats.commentCount/stats.viewCount || null,
+				duration: stats.duration || null,
+			}
+		})
+
+		const field_avg = (xs, vget = v=> v)=> {
+			const vs = xs.map(vget)
+			const ns = vs.filter(v=> typeof v==='number')
+			return xs_sum(ns)/ns.length
+		}
+		const stat_avgs = {
+			likes_per_dislikes: field_avg(vs, v=> v.stats_calc.likes_per_dislikes),
+			likes_per_rates: field_avg(vs, v=> v.stats_calc.likes_per_rates),
+			likes_per_views: field_avg(vs, v=> v.stats_calc.likes_per_views),
+			comments_per_views: field_avg(vs, v=> v.stats_calc.comments_per_views),
+			duration: field_avg(vs, v=> v.stats_calc.duration),
+			views: field_avg(vs, v=> v.stats.viewCount),
+		}
+
+		// const overview = xs_overview(vs_stats, {unwrap: true, string_map: v=> v.slice(0, 50)})
+		// console.dir({ch_id, stat_avgs}, {depth: 7})
+		// return
+		return stat_avgs
+	}
+
+	const ch_stat_avgs_map = Object.fromEntries([...by_channel]
+		.map(([ch_id, vs])=> [ch_id, prepare_channel_stat_avgs(ch_id, vs)]))
+
+	// const overview = xs_overview(Object.values(ch_stat_avgs_map))
+	// console.dir({ch_stat_avgs_overview: overview}, {depth: 7})
+
+	campaign_extract.map(c=> {
+		const stats = ch_stat_avgs_map[c.ch_id]
+		if (stats) {
+			Object.entries(stats).map(([k, v])=> {
+				c['ch_avg10_'+k] = v
+			})
+			c.ch_avg10_views_per_subs = stats.views/c.subscriber_count||null
+		}
+		const vid = by_video[c.post_id]
+		if (vid) {
+			c.view_count = vid.stats.viewCount
+		}
+		if (!c.view_count) {
+			// wo view_count
+			console.dir({pid: c.post_id, vid})
+		}
+	})
+
+	// console.dir(campaign_extract)
+	// cvr
+	// ldr
+	const tsv = xs_to_tsv(campaign_extract, {fields: (
+		'post_id	ch_id	country	view_count	ch_avg10_likes_per_dislikes	ch_avg10_likes_per_rates	ch_avg10_likes_per_views	ch_avg10_comments_per_views	ch_avg10_views'+
+		'	ch_avg10_duration	ch_avg10_views_per_subs	subscriber_count	sales	cost	ch_sales_from_fees	ch_revenue	category	ch_name').split('\t')})
+	// console.log(tsv)
+	const filename = './local/'+campaign_id+'.campaign_extract.v1.tsv'
+	await fs.promises.writeFile(filename, tsv)
+
+	tlog({at: 'wrote', filename, count: campaign_extract.length})
+
+
+	return
+
+	/*
+	Plan:
+	batch process: a
+	
+	with ['UC9VMz-llpSHTIfOzuggf5zA', 'UCzRE5sLT_nQQaxUCnADO0bQ'] as a
+	unwind a as ch_id
+	call apoc.cypher.doIt("
+		match (ch:Channel {id: ch_id})-[:has_uploads]->(:Playlist)-[:has_video]->(v:Video)
+		with ch, v order by v.published_at desc limit 10
+		return ch.id as ch_id, v.id as v_id
+	", {ch_id: ch_id}) yield value
+	return value.ch_id, value.v_id, value.v_d
+
+	// explore how many results per page / video_ids to send at max
+	// TODO: later add logic to detect if changed / total results > results on page
+	// use max count as batch process bucket size in prev
+	const d = await yt_api.videos({
+		video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
+		// also checkout the other .parts
+	})
+
+	send response for import/merge to db
+
+	modify campaign_extract_for_ml query to include + do arithmetic on last 10 vids where data is available
+
+	upload tsv file to slack
+	 */
+	
+	// const d = await yt_api.videos({
+	// 	video_ids: ['AjWRjVYA0PY', 'huKsSliDD3A'],
+	// 	// also checkout the other .parts
+	// })
+	// console.dir(d, {depth: 10})
+
+}
+
 
 async function merge_slug_fix () {
 	// merge slug fix
