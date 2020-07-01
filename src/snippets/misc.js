@@ -15,6 +15,7 @@ async function setup_constraints () {
 	await unique('processor_id_unique', '(n:Processor) assert n.id is unique')
 	await unique('campaign_id_unique', '(n:Campaign) assert n.id is unique')
 
+	// call db.index.fulltext.createNodeIndex('channel_title_fulltext', ['Channel'], ['title'])
 }
 
 module.exports = {

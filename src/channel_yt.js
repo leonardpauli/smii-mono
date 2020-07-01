@@ -45,6 +45,8 @@ const fragment = {
 					at: 'fetch_import_channel',
 					error,
 				})
+
+
 				await this.neo4j_request_and_log(`
 					with $log_obj as log_obj, $q_id as q_id
 					${queries['queue item mark as failed']({log_obj: 'log_obj', q_id: 'q_id'})}
@@ -53,6 +55,35 @@ const fragment = {
 					q_id: no_queue_node?null:x.q_id,
 					log_obj,
 				})
+
+				/* {
+				  "endpoint": "/channels",
+				  "query": {"part": [...],"id": ["UCgO0J4fCNTyU-PibDiNEFjQ"]},
+				  "date": "2020-06-17T23:16:30.545Z",
+				  "error": { "error": {
+			      "code": 403,
+			      "message": "The request cannot be completed because you have exceeded your <a href=\"/youtube/v3/getting-started#quota\">quota</a>.",
+			      "errors": [{
+		          "message": "The request cannot be completed because you have exceeded your <a href=\"/youtube/v3/getting-started#quota\">quota</a>.",
+		          "domain": "youtube.quota",
+		          "reason": "quotaExceeded"
+		        }]
+				  } },
+				  "status": 403
+				} */
+
+				const status_forbidden = error.data && error.data.status===403
+				if (status_forbidden) {
+					let is_quotaExceeded = false
+					try {
+						is_quotaExceeded = error.data.error.error.errors[0].reason === 'quotaExceeded'
+					} catch (e) { /*noop*/ }
+					if (is_quotaExceeded) {
+						dlog({at: 'batch_fetch_import_channels.quotaExceeded', is_quotaExceeded})
+						process.exit(0)
+						return
+					}
+				}
 			}
 		}
 
