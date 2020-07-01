@@ -309,8 +309,8 @@ return
 `
 match (q:Queued)
 with q, coalesce(q.finished_at, q.taken_at, q.created_at) as last_d
-where last_d > datetime("20190101")
-with last_d, q order by last_d desc limit 300
+where last_d > datetime(${cutoff_date})
+with last_d, q order by last_d desc limit ${count}
 
 optional match (q)-[:has_node]->(c:Channel_yt)
 optional match (q)<-[:has_node]-(p:Processor)
