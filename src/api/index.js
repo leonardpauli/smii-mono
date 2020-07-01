@@ -22,8 +22,9 @@ const actions = {
 	queue_add_featured ({count = 1} = {}) {
 		return this.request({action: 'queue.add.channels.featured', payload: {count}})
 	},
-	queue_add_many_by_id ({xs = []} = {}) {
-		return this.request({action: 'queue.add.channels.by_id_once', payload: {xs}})
+	queue_add_many ({xs = [], priority = 1} = {}) {
+		// xs: [{id, slug}]
+		return this.request({action: 'queue.add.channels.by_id', payload: {xs, priority}})
 	},
 
 }

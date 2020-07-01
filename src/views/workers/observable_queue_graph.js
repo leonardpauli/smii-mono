@@ -33,7 +33,7 @@ false
   const span_status = html`<span></span>`
   const el = md`Runner ${span_status} ${span} ${button}`
   const me = {
-    check_delay: 500,
+    check_delay: 637,
     running: false,
     counter: 0,
     async fn () {

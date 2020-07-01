@@ -5,6 +5,7 @@
 		
 		router-link.link(:to="{name: 'workers'}") Overview
 		router-link.link(:to="{name: 'worker_queue_graph'}") Queue Graph
+		router-link.link(:to="{name: 'worker_queue_list'}") Queue List
 
 	.header
 		h3 smii-web
