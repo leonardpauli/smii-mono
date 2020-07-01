@@ -20,11 +20,15 @@ async function main () {
 
 	if (false) return merge_slug_fix.call(this)
 	if (false) return campaign_import_jun20_tmp.call(this)
-	if (false) return misc_tmp.call(this)
+	if (true) return misc_tmp.call(this)
 
 }
 
 async function misc_tmp () {
+
+	true && await this.neo4j_request_and_log(
+		queries['queue viz queued list']())
+	return
 
 	if (false) {
 		const d = await yt_api.channel_by_username({

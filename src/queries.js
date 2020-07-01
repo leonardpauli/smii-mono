@@ -210,17 +210,13 @@ set
   n.subscriber_count = case when ${channel_raw}.subscriber_count_hidden = true then null else toInteger(${channel_raw}.subscriber_count) end,
 
   n.country = ${channel_raw}.country
+
 with n, ${channel_raw}${with_add}
 
-
-// foreach(dummy in [1] |
-//   // TODO: remove prev, potentially creates dummy node
-//   merge (n)-[r:has_country]->(:Country)
-//   delete r
-// )
 foreach(dummy in case when ${channel_raw}.country is not null then [1] else [] end |
   merge (n_country:Country {yt_code: ${channel_raw}.country})
-  merge (n)-[:has_country]->(n_country)
+  merge (n)-[n_country_r:has_country]->(n_country)
+    on create set n_country_r.created_at = datetime()
 )
 
 ${_text_node_replace({
@@ -299,7 +295,7 @@ return
   collect(l {.at, .error, created_at: tostring(l.created_at)}) as logs
 `,
 
-['queue viz queued list']: ({count = '300', cutoff_date = '"20190101"'})=>
+['queue viz queued list']: ({count = '300', cutoff_date = '"20190101"'} = {})=>
 `
 match (q:Queued)
 with q, coalesce(q.finished_at, q.taken_at, q.created_at) as last_d
@@ -310,15 +306,16 @@ optional match (q)-[:has_node]->(c:Channel_yt)
 optional match (c)-[:has_featured_channel]->(fc:Channel_yt)
 // optional match (c)-[:has_uploads]->(pl:Playlist)-[:has_video]->(v:Video)
 with q, p, c, collect(fc.id) as featured
-optional match (c)-[:has_country]->(cu:Country)
+optional match (c)-[cu_r:has_country]->(cu:Country)
+optional match (c)<-[s_r:has_channel]-(s:Slug)
+with * order by q.created_at desc, s_r.created_at desc, cu_r.created_at desc
 // return *
 return
   q {.id, .priority, .status},
   p.id as p_id,
-  c {.id, .slug, .title, fetched_at: tostring(c.fetched_at), .subscriber_count},
-  cu.yt_code as country
+  c {.id, slug: collect(s)[0].id, .title, fetched_at: tostring(c.fetched_at), .subscriber_count},
+  collect(cu)[0].yt_code as country
 `,
-
 
 ['queue add channels (rand 10 unqueued)']: ()=>
 // match ()-[:has_featured_channel]->(c:Channel_yt)
