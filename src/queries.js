@@ -201,7 +201,7 @@ ${mark_empty?`
 set
   n :Channel,
   n.fetched_at = case when ${channel_raw}.fetched_at is null then null else datetime(${channel_raw}.fetched_at) end,
-  set n.empty = true
+  n.empty = true
 `:`
 set
   n :Channel,

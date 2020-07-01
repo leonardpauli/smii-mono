@@ -64,8 +64,13 @@ const fragment = {
 				ids: [id],
 			})
 			if (res.error) throw error_make({...res, at: 'yt_api'})
-			if (!res.data || !res.data.items) throw new Error(`no data.items`)
-			const d_raw = !res.data.items.length?{id, empty: true}:res.data.items[0]
+			if (!res.data || !res.data) {
+				const err = new Error(`no res.data`)
+				err.data = res
+				throw err
+			}
+			const is_empty = res.data.pageInfo.totalResults===0 || !res.data.items || !res.data.items.length
+			const d_raw = is_empty?{id, empty: true}:res.data.items[0]
 
 			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else if (slug) {
@@ -73,8 +78,13 @@ const fragment = {
 				username: slug,
 			})
 			if (res.error) throw error_make({...res, at: 'yt_api'})
-			if (!res.data || !res.data.items) throw new Error(`no data.items`)
-			const d_raw = !res.data.items.length?{slug, empty: true}:res.data.items[0]
+			if (!res.data || !res.data.items) {
+				const err = new Error(`no res.data`)
+				err.data = res
+				throw err
+			}
+			const is_empty = res.data.pageInfo.totalResults===0 || !res.data.items || !res.data.items.length
+			const d_raw = is_empty?{slug, empty: true}:res.data.items[0]
 
 			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else throw new Error(`no id or slug`)
@@ -88,7 +98,7 @@ const fragment = {
 			rest: {},
 		}
 
-		const mark_empty = raw.empty
+		const mark_empty = !!raw.empty
 		if (!mark_empty) try {
 			obj_extract({
 				template: raw_templates.channel,
@@ -107,16 +117,16 @@ const fragment = {
 		}
 
 		if (!ctx.q_id) {
-			await this.neo4j_request_and_log(`
+			await this.neo4j_request(`
 				with $channel_raw as channel_raw
 				${queries.channel_import({channel_raw: 'channel_raw', mark_empty})}
-				return n.title
+				return 0
 			`, {channel_raw: obj})
 		} else {
-			await this.neo4j_request_and_log(`
+			await this.neo4j_request(`
 				with $p_id as p_id, $xs as xs
 				${queries.channel_import_queued_mark_done({p_id: 'p_id', xs: 'xs', mark_empty})}
-				return 1
+				return 0
 			`, {
 				p_id: ctx.p_id,
 				xs: [{channel: obj, q_id: ctx.q_id}],

@@ -57,9 +57,10 @@ async function main () {
 			p_id: config.processor_id,
 		})
 
-	false && await this.neo4j_request_and_log(
-		queries['queue add channels by id once']({xs: '$xs'}), {
-			xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
+	true && await this.neo4j_request_and_log(
+		queries['queue add channels once']({xs: '$xs'}), {
+			xs: [{id: yt_channel_id_linustechtips || 'some_non_existant_channel_3412451245124'}],
+			// xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
 		})
 	false && await this.neo4j_request_and_log(queries['queue inspect with logs'])
 
