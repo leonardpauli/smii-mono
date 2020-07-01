@@ -74,22 +74,49 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 )
 `
 
-// TODO: potentially merge .slug + .slug_tmp nodes afterwards
-//  see https://stackoverflow.com/a/21504782/1054573
+// channel_raw.{id, slug}; at least one, possibly both // {id}, {slug}, {id, slug}
+// Slug{id}.has_channel{created_at: datetime()}: Channel_yt{id is Id or Empty}
 const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n', set_other = false})=> `
-foreach(dummy in case when ${channel_raw}.id is not null then [1] else [] end |
-  merge (cmm_id:Channel_yt {id: ${channel_raw}.id})
-  ${set_other?`set cmm_id.slug_tmp = ${channel_raw}.slug`:''}
-)
-foreach(dummy in case when ${channel_raw}.slug is not null then [1] else [] end |
-  merge (cmm_slug:Channel_yt {slug: ${channel_raw}.slug})
-  ${set_other?`set cmm_slug.id_tmp = ${channel_raw}.id`:''}
-)
-with ${channel_raw}${with_add}
-match (${c_var}:Channel_yt)
-where ${c_var}.id = ${channel_raw}.id or ${c_var}.slug = ${channel_raw}.slug
-with ${c_var}, ${channel_raw}${with_add}
+call apoc.do.case([
+  ${channel_raw}.id is not null and ${channel_raw}.slug is null, "merge (c:Channel_yt {id: id}) return c",
+  ${channel_raw}.id is not null and ${channel_raw}.slug is not null, "
+    merge (s:Slug {id: slug})
+    merge (c:Channel_yt {id: id})
+    with s, c
+    optional match (s)-[:has_channel]->(c_empty:Channel_yt) where c_empty.id is null
+
+    call apoc.do.case([
+      c_empty is not null,
+      'call apoc.refactor.mergeNodes([c, c_empty], {\`.*\`: \\"discard\\"}) yield node as c_merged return 1',
+      not (s)-[:has_channel]->(c),
+      'merge (s)-[:has_channel {created_at: datetime()}]->(c) return 1'
+    ], 'return 1',
+      {c: c, c_empty: c_empty, s: s}
+    ) yield value as dummy2  
+
+    return c
+  ",
+  ${channel_raw}.id is null and ${channel_raw}.slug is not null, "
+    merge (s:Slug {id: slug})
+    with s
+    optional match (s)-[:has_channel]->(c_empty:Channel_yt) where c_empty.id is null
+
+    call apoc.do.when(
+      c_empty is null,
+      'merge (s)-[:has_channel {created_at: datetime()}]->(c_empty:Channel_yt) return c_empty',
+      'return c_empty_in as c_empty',
+      {c_empty_in: c_empty, s: s}
+    ) yield value
+    with value.c_empty as c_empty
+    
+    return c_empty as c
+  "
+], "return null as c", {
+  id: ${channel_raw}.id, slug: ${channel_raw}.slug
+}) yield value as c_value
+with c_value.c as ${c_var}, ${channel_raw}${with_add}
 `
+
 
 const channel_add_with_campaign = ({xs, campaign_id, with_add = ''})=>
 /*

@@ -18,6 +18,14 @@ const yt_channel_username_beneater = 'eaterbc'
 
 async function main () {
 
+	if (false) return merge_slug_fix.call(this)
+	if (false) return campaign_import_jun20_tmp.call(this)
+	if (false) return misc_tmp.call(this)
+
+}
+
+async function misc_tmp () {
+
 	if (false) {
 		const d = await yt_api.channel_by_username({
 			username: 'TheFerp2000',
@@ -28,9 +36,6 @@ async function main () {
 		console.dir(d, {depth: 7})
 		return
 	}
-
-	if (false) return merge_slug_fix.call(this)
-	if (false) return campaign_import_jun20_tmp.call(this)
 
 	// TODO: (l:Log)--(q:Queued {status: 'failed'})--(c:Channel_yt) where c.fetched_at is not null detach delete l, q
 	// TODO: merge id + slug node, eg.
