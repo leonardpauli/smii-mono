@@ -25,8 +25,8 @@ const action_list = [{
 	extractor: (ctx, res)=> res[0],
 	query: `
 		with $q as q
-		optional match (c_id:Channel {id: q})
-		optional match (c_slug:Channel {slug: q})
+		optional match (c_id:Channel_yt {id: q})
+		optional match (c_slug:Channel_yt {slug: q})
 		with q, collect(c_id)+collect(c_slug) as exact_match
 		with q, exact_match, size(exact_match)>0 as has_exact
 		call apoc.do.when(has_exact,
