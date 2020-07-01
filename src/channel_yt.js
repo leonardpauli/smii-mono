@@ -64,9 +64,8 @@ const fragment = {
 				ids: [id],
 			})
 			if (res.error) throw error_make({...res, at: 'yt_api'})
-			if (!res.data || !res.data.items || !res.data.items.length)
-				throw new Error(`no results`)
-			const d_raw = res.data.items[0]
+			if (!res.data || !res.data.items) throw new Error(`no data.items`)
+			const d_raw = !res.data.items.length?{id, empty: true}:res.data.items[0]
 
 			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else if (slug) {
@@ -74,21 +73,23 @@ const fragment = {
 				username: slug,
 			})
 			if (res.error) throw error_make({...res, at: 'yt_api'})
-			if (!res.data || !res.data.items || !res.data.items.length)
-				throw new Error(`no results`)
-			const d_raw = res.data.items[0]
+			if (!res.data || !res.data.items) throw new Error(`no data.items`)
+			const d_raw = !res.data.items.length?{slug, empty: true}:res.data.items[0]
 
 			await this.import_channel(d_raw, {ctx, fetched_at: res.date})
 		} else throw new Error(`no id or slug`)
 	},
 
 	async import_channel (raw, {ctx, fetched_at}) {
+		// raw: {id and/or slug, empty: true} or {id, ...}
 
 		const obj = {
 			fetched_at: fetched_at.toISOString(),
 			rest: {},
 		}
-		try {
+
+		const mark_empty = raw.empty
+		if (!mark_empty) try {
 			obj_extract({
 				template: raw_templates.channel,
 				source: raw,
@@ -108,13 +109,13 @@ const fragment = {
 		if (!ctx.q_id) {
 			await this.neo4j_request_and_log(`
 				with $channel_raw as channel_raw
-				${queries.channel_import({channel_raw: 'channel_raw'})}
+				${queries.channel_import({channel_raw: 'channel_raw', mark_empty})}
 				return n.title
 			`, {channel_raw: obj})
 		} else {
 			await this.neo4j_request_and_log(`
 				with $p_id as p_id, $xs as xs
-				${queries.channel_import_queued_mark_done({p_id: 'p_id', xs: 'xs'})}
+				${queries.channel_import_queued_mark_done({p_id: 'p_id', xs: 'xs', mark_empty})}
 				return 1
 			`, {
 				p_id: ctx.p_id,

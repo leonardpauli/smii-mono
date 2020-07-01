@@ -194,9 +194,15 @@ set cd += x.meta
 return count(distinct v), count(distinct cd), count(distinct campaign)
 `
 
-const channel_import = ({channel_raw, with_add = ''})=> `
+const channel_import = ({channel_raw, mark_empty, with_add = ''})=> `
 ${channel_merge_match({channel_raw, with_add, c_var: 'n', set_other: true})}
 
+${mark_empty?`
+set
+  n :Channel,
+  n.fetched_at = case when ${channel_raw}.fetched_at is null then null else datetime(${channel_raw}.fetched_at) end,
+  set n.empty = true
+`:`
 set
   n :Channel,
   n += ${channel_raw}.rest,
@@ -210,6 +216,7 @@ set
   n.subscriber_count = case when ${channel_raw}.subscriber_count_hidden = true then null else toInteger(${channel_raw}.subscriber_count) end,
 
   n.country = ${channel_raw}.country
+remove n.empty
 
 with n, ${channel_raw}${with_add}
 
@@ -253,19 +260,20 @@ foreach(fc_id in ${channel_raw}.featured_channel_ids |
   merge (fc:Channel_yt {id: fc_id})
   merge (n)-[:has_featured_channel]->(fc)
 )
+`}
 
 with n, ${channel_raw}${with_add}
 `;
 
 
-const channel_import_queued_mark_done = ({p_id, xs})=>
+const channel_import_queued_mark_done = ({p_id, xs, mark_empty = false})=>
 // with "..." as p_id, [{q_id: "...", channel: {...}}] as xs
 `
 match (p:Processor {id: p_id})
 unwind xs as x
 with x.channel as channel_raw, x.q_id as q_id, p
 
-${channel_import({channel_raw: 'channel_raw', with_add: ', q_id, p'})}
+${channel_import({channel_raw: 'channel_raw', with_add: ', q_id, p', mark_empty})}
 
 match (q:Queued {id: q_id})
 set
