@@ -286,35 +286,47 @@ const queries = {
   video_add_with_campaign,
 
 
-['queue viz processors list']: ()=>
+['queue viz processors list']: ({logs_limit = 10} = {})=>
 `
 match (p:Processor)
-optional match (l:Log)
+optional match (p)--(l:Log)
+with p, l order by p.started_at desc, l.created_at desc
 return
-  p {.id},
-  collect(l {.at, .error, created_at: tostring(l.created_at)}) as logs
+  p {.id, started_at: tostring(p.started_at)},
+  [a in collect(l)[0..${logs_limit}] | a {.at, .error, created_at: tostring(a.created_at)}] as logs
 `,
 
+// q, p, c {slug, country, featured}
 ['queue viz queued list']: ({count = '300', cutoff_date = '"20190101"'} = {})=>
 `
 match (q:Queued)
 with q, coalesce(q.finished_at, q.taken_at, q.created_at) as last_d
-where last_d > datetime(${cutoff_date})
-with q order by last_d desc limit ${count}
-optional match (q)<-[:has_node]-(p:Processor)
+where last_d > datetime("20190101")
+with last_d, q order by last_d desc limit 300
+
 optional match (q)-[:has_node]->(c:Channel_yt)
+optional match (q)<-[:has_node]-(p:Processor)
+with last_d, q, p, c
+
 optional match (c)-[:has_featured_channel]->(fc:Channel_yt)
-// optional match (c)-[:has_uploads]->(pl:Playlist)-[:has_video]->(v:Video)
-with q, p, c, collect(fc.id) as featured
+with last_d, q, p, c, collect(fc.id) as featured
+
 optional match (c)-[cu_r:has_country]->(cu:Country)
+with last_d, q, p, c, featured, cu order by last_d desc, cu_r.created_at desc
+with last_d, q, p, c, featured, collect(cu) as cus
+with last_d, q, p, c, featured, cus[0].yt_code as country
+
 optional match (c)<-[s_r:has_channel]-(s:Slug)
-with * order by q.created_at desc, s_r.created_at desc, cu_r.created_at desc
-// return *
+with last_d, q, p, c, featured, country, s order by last_d desc, s_r.created_at desc
+with last_d, q, p, c, featured, country, collect(s) as ss
+with last_d, q, p, c, featured, country, ss[0].id as slug
+
 return
   q {.id, .priority, .status},
   p.id as p_id,
-  c {.id, slug: collect(s)[0].id, .title, fetched_at: tostring(c.fetched_at), .subscriber_count},
-  collect(cu)[0].yt_code as country
+  c {.id, slug: slug, .title, fetched_at: tostring(c.fetched_at), .subscriber_count},
+  country,
+  featured
 `,
 
 ['queue add channels (rand 10 unqueued)']: ()=>
@@ -398,8 +410,11 @@ return
   match (p)-[:has_node]->(q:Queued)-[:has_node]->(c:Channel_yt)
   where q.status = 'taken'
   with q, c
-  order by q.priority desc, q.created_at asc
-  return q.id as q_id, tostring(q.taken_at) as taken_at, c {.id, .slug} as channel
+  
+  optional match (c)<-[s_r:has_channel]-(s:Slug)
+  with * order by q.priority desc, q.created_at asc, s_r.created_at desc
+
+  return q.id as q_id, tostring(q.taken_at) as taken_at, c {.id, slug: collect(s)[0].id} as channel
 `,
 
 
@@ -458,22 +473,30 @@ return
 // assumes processor already registered
 // with "..." as p_id
 `
+  match (q:Queued) where q.status is null
+  match (q)-[:has_node]->(c:Channel_yt)
+  with q, c limit ${count}
+
+  match (c)
+  optional match (c)<-[s_r:has_channel]-(s:Slug)
+  with q, c, s
+  order by q.priority desc, q.created_at asc, s_r.created_at desc
+  with q, c, collect(s) as ss
+  with q, c, ss[0].id as slug
+
   match (p:Processor {id: ${p_id}})
-  with p
-  match (q:Queued)-[:has_node]->(c:Channel_yt)
-  where q.status is null
-  with p, q, c
-  order by q.priority desc, q.created_at asc
-  limit ${count}
+
   set
     q.status = 'taken',
     q.taken_at = datetime(),
     q.finished_at = null,
     q.id = coalesce(q.id, apoc.create.uuid())
+
   merge (p)-[:has_node]->(q)
-  return q.id as q_id, c {.id, .slug} as channel
-  // TODO: possibly also return .left.etag?
+
+  return q.id as q_id, c {.id, slug: slug} as channel
 `,
+// TODO: possibly also return .left.etag?
 
 
 ['queue item mark as failed']: ({log_obj, q_id})=>

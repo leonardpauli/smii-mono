@@ -25,9 +25,16 @@ async function main () {
 }
 
 async function misc_tmp () {
+	const p_id = config.processor_id
+
+	// const d = await yt_api.commentThreads({video_id: 'l-C_367kkno'})
+	// console.dir(d, {depth: 10})
+	// return
 
 	true && await this.neo4j_request_and_log(
-		queries['queue viz queued list']())
+		queries['queue viz queued list']({}))
+		// queries['queue viz processors list']({logs_limit: 0}))
+		// queries['queue inspect taken for processor']({p_id: '$p_id'}), {p_id})
 	return
 
 	if (false) {
