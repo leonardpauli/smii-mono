@@ -43,24 +43,59 @@ async function nordvpn_ingest () {
 
 	const campaign_id = 'nordvpn_jun20'
 
-	const raw = require('../../local/nordvpn_rado_v2.json') // different format
+	// const raw = require('../../local/nordvpn_rado_v2.json') // different format
+	// await campaign_import_data.call(this, {rows: raw, campaign_id})
 	// const raw = require('../../local/nordvpn_rado_v3_20200701.json')
-	// const raw = require('../../local/nordvpn_rado_v3_20200702.json')
-
+	const raw = require('../../local/nordvpn_rado_v3_20200702.json')
 	await campaign_import_data.call(this, {rows: raw, campaign_id})
-	// await campaign_import_data({rows: raw, campaign_id})
-	// await campaign_import_data({rows: raw, campaign_id})
+
 }
 
 async function campaign_import_data ({rows, campaign_id}) {
 	// rows is many {url/id/slug, ...campaign_data, posts: [{url/id, ...campaign_data}, ...]}
-	
+
 	const rows_cleaned = rows.map(clean_row)
 
-	const channels = rows_cleaned.map(({channel, campaign_data})=> ({channel, campaign_data}))
-	const posts = xs_concat(rows_cleaned.map(({posts})=> posts))
+	const channels_all = rows_cleaned.map(({channel, campaign_data})=> ({channel, campaign_data}))
+	const posts_all = xs_concat(rows_cleaned.map(({posts})=> posts))
 
-	console.dir({channels, posts_count: posts.length, posts}, {depth: 4})
+	const channels = channels_all.filter(({channel: c})=> c.id||c.slug)
+	const posts = posts_all.filter(({post: c})=> c.id||c.slug)
+
+	const stats = {
+		channels: {
+			with_id: channels.length,
+			missing: channels_all.length-channels.length,
+		},
+		posts: {
+			with_id: posts.length,
+			missing: posts_all.length-posts.length
+		},
+	}
+
+	console.dir({stats, snippet: null && {
+		channels: channels.slice(0,3),
+		posts: posts.slice(0,3),
+	}}, {depth: 4})
+
+	const xs = channels.map(c=> c.channel)
+	console.dir({xs})
+	await this.neo4j_request_and_log(
+		queries['queue add channels unfetched']({xs: '$xs'}), {
+			xs,
+		})
+
+	/* TODO:
+	- merge channel.channel_data + merge connect w campaign
+	- queue fetch unfetched channel playlist // TODO: later: get latest + older/paginated if needed (check date?)
+		- inc video import overview
+	- merge video.channel_data + merge connect w campaign
+	- queue fetch video stats for posts
+	- streamline tsv extractor
+		- as api + ui web
+	// - category + vidoes by promocode find
+	*/
+
 }
 
 const clean_row = (row)=> {

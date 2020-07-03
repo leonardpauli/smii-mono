@@ -58,7 +58,12 @@ async function main () {
 		})
 
 	false && await this.neo4j_request_and_log(
-		queries['queue add channels once']({xs: '$xs'}), {
+		queries['queue add channels']({xs: '$xs'}), {
+			xs: [{id: yt_channel_id_linustechtips || 'some_non_existant_channel_3412451245124'}],
+			// xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
+		})
+	false && await this.neo4j_request_and_log(
+		queries['queue add channels unfetched']({xs: '$xs'}), {
 			xs: [{id: yt_channel_id_linustechtips || 'some_non_existant_channel_3412451245124'}],
 			// xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
 		})

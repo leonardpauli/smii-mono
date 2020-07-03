@@ -83,7 +83,7 @@ async function misc_tmp () {
 		let i = 0
 		console.dir(channel_slugs.length)
 		await this.neo4j_request_and_log(
-			queries['queue add channels once']({xs: '$xs'}), {
+			queries['queue add channels unfetched']({xs: '$xs'}), {
 				xs: channel_slugs.slice(i*size, (i+1)*size),
 			})
 
@@ -602,109 +602,6 @@ async function campaign_extract_for_ml ({campaign_id, chvs = null}) {
 	`, {campaign_id})
 }
 
-async function nordvpn_clean () {
-	const country_code_normalise = await country_code_normalise_get()
-
-	dlog({at: 'nordvpn_clean', load: 'nordvpn_rado_v2.json'})
-
-	const raw = require('../../local/nordvpn_rado_v2.json')
-
-	const clear_as_num = (row, k)=> {
-		if (!row[k] && row[k]!==0) delete row[k]
-	}
-
-	raw.map(row=> {
-		if ('country' in row) {
-			if (row.country) {
-				const m = country_code_normalise(row.country)
-				if (m) {
-					row.country_iso = m
-				} else {
-					row.country_other = row.country
-				}
-			}
-			delete row.country
-		}
-		if ('profile_link' in row) {
-			if (row.profile_link) {
-				const m = yt_api__channel_url_parse(row.profile_link)
-				if (m && m.type==='channel') {
-					row.id = m.id
-				} else if (m && m.type==='user') {
-					row.slug = m.id
-				} else {
-					row.profile_link_other = row.profile_link
-				}
-			}
-			delete row.profile_link
-		}
-		clear_as_num(row, 'revenue')
-
-		row.posts && row.posts.map(row=> {
-			clear_as_num(row, 'clicks')
-			clear_as_num(row, 'sales')
-			clear_as_num(row, 'cost')
-			delete row.year // clear_as_num(row, 'year')
-
-			if ('upload_date' in row) {
-				if (!row.upload_date) {
-					delete row.upload_date
-				} else {
-					const d = new Date(row.upload_date)
-					if (d) {
-						row.upload_date = d
-					} else {
-						row.upload_date_other = d
-						delete row.upload_date
-					}
-				}
-			}
-
-			if ('post_link' in row) {
-				if (row.post_link) {
-					const m = yt_api__video_url_parse(row.post_link)
-					if (m) {
-						row.id = m.id
-						if (m.t) row.post_link_t = m.t
-					} else {
-						row.post_link_other = row.post_link
-					}
-				}
-				delete row.post_link
-			}
-
-		})
-	})
-
-	// console.dir(xs_overview(raw, {unwrap: true, string_limit: 0}), {depth: 8})
-
-	const _posts_raw = []
-	const _channels_raw = raw.map(row=> {
-		const {id, slug, posts, ...meta} = row
-		posts && posts.map(row=> {
-			const {id, ...meta} = row
-			_posts_raw.push({id, meta})
-		})
-		return {id, slug, meta}
-	})
-
-	const out = {
-		posts: [],
-		channels: [],
-	}
-	const missing = {
-		posts: [],
-		channels: [],
-	}
-
-	_posts_raw.map(p=> {p.id?out.posts.push(p):missing.posts.push(p)})
-	_channels_raw.map(p=> {p.id||p.slug?out.channels.push(p):missing.channels.push(p)})
-
-	// console.dir(xs_overview([out], {unwrap: true, string_limit: 3}), {depth: 3})
-	// console.dir(missing, {depth: 3})
-
-	return {out, missing}
-}
 
 
 module.exports = {main}

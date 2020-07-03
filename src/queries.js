@@ -76,7 +76,7 @@ foreach(dummy in case when ${content} is not null then [1] else [] end |
 
 // channel_raw.{id, slug}; at least one, possibly both // {id}, {slug}, {id, slug}
 // Slug{id}.has_channel{created_at: datetime()}: Channel_yt{id is Id or Empty}
-const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n', set_other = false})=> `
+const channel_merge_match = ({channel_raw, with_add = '', c_var = 'n'})=> `
 call apoc.do.case([
   ${channel_raw}.id is not null and ${channel_raw}.slug is null, "merge (c:Channel_yt {id: id}) return c",
   ${channel_raw}.id is not null and ${channel_raw}.slug is not null, "
@@ -99,7 +99,7 @@ call apoc.do.case([
   ${channel_raw}.id is null and ${channel_raw}.slug is not null, "
     merge (s:Slug {id: slug})
     with s
-    optional match (s)-[:has_channel]->(c_empty:Channel_yt) where c_empty.id is null
+    optional match (s)-[:has_channel]->(c_empty:Channel_yt) // where c_empty.id is null
 
     call apoc.do.when(
       c_empty is null,
@@ -195,7 +195,7 @@ return count(distinct v), count(distinct cd), count(distinct campaign)
 `
 
 const channel_import = ({channel_raw, mark_empty, with_add = ''})=> `
-${channel_merge_match({channel_raw, with_add, c_var: 'n', set_other: true})}
+${channel_merge_match({channel_raw, with_add, c_var: 'n'})}
 
 ${mark_empty?`
 set
@@ -362,7 +362,7 @@ return
 `,
 
 
-['queue add channels once']: ({xs, priority = 1.0})=>
+['queue add channels']: ({xs, priority = 1.0, extra_where = ''})=>
 // xs: [{id: '...'}, {slug: '...'}, ...]
 `
   with ${xs} as xs
@@ -371,7 +371,7 @@ return
   ${channel_merge_match({channel_raw: 'x', c_var: 'c'})}
 
   optional match (c)<-[:has_node]-(pq:Queued)
-  where pq.status is null or pq.status = 'taken'
+  where pq.status is null or pq.status = 'taken' ${extra_where}
   with c, count(pq) as pqc
 
   // TODO: if exists, mod earliest.priority = max(earliest.priority, priority)?
@@ -382,6 +382,10 @@ return
 
   return count(c) as count, pqc as existing_queued_entries_count
 `,
+
+['queue add channels unfetched']: (opt)=> queries['queue add channels']({
+  ...opt, extra_where: ` or pq.status = 'done'`
+}),
 
 
 ['queue inspect with logs']:
