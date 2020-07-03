@@ -341,7 +341,7 @@ return
 // match ()-[:has_featured_channel]->(c:Channel_yt)
 `
   match (c:Channel_yt)
-  where c.fetchedAt is null
+  where c.fetched_at is null
   and not (c)<-[:has_node]-(:Queued)
   with c order by rand() limit 10 // return c
   merge (c)<-[:has_node]-(q:Queued {created_at: datetime(), priority: 1.0})

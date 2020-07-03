@@ -48,8 +48,8 @@ async function main () {
 	false && await this.neo4j_request_and_log(
 		queries['queue reset stalling "taken"']({dur_str: '"PT1S"'}))
 
-	false && await this.neo4j_request_and_log(
-		queries['queue add channels (from featured_channel, ordered by featured by channel size)']({count: 10}))
+	true && await this.neo4j_request_and_log(
+		queries['queue add channels (from featured_channel, ordered by featured by channel size)']({count: 300}))
 
 
 	false && await this.neo4j_request_and_log(
@@ -57,7 +57,7 @@ async function main () {
 			p_id: config.processor_id,
 		})
 
-	true && await this.neo4j_request_and_log(
+	false && await this.neo4j_request_and_log(
 		queries['queue add channels once']({xs: '$xs'}), {
 			xs: [{id: yt_channel_id_linustechtips || 'some_non_existant_channel_3412451245124'}],
 			// xs: [yt_channel_id_linustechtips, "UCa6vGFO9ty8v5KZJXQxdhaw", "UCBgw11dCV17FJDsHxNGZBtA"],
