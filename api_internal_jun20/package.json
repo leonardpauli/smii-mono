@@ -1,0 +1,18 @@
+{
+  "name": "smii-api-20200527",
+  "version": "0.1.0",
+  "description": "social-media-influencer-insights api",
+  "main": "src/main.js",
+  "dependencies": {
+    "@leonardpauli/utils": "github:leonardpauli/js-utils#jun2020",
+    "neo4j-driver": "^4.0.2",
+    "smii-fetcher-20200610": "github:leonardpauli/smii-fetcher-20200610#main"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "load_env": "echo 'manually run source .env'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Leonard Pauli",
+  "license": "UNLICENCED"
+}
