@@ -152,9 +152,9 @@ const action_list = [{
 	}),
 }, {
 	type: 'neo4j_query',
-	title: 'queue.add.channels.by_id',
+	title: 'queue.add.channels.by_id_unfetched',
 	param_get: ctx=> ({xs: ctx.payload.xs}),
-	query: ctx=> fetcher_queries['queue add channels once']({
+	query: ctx=> fetcher_queries['queue add channels unfetched']({
 		xs: '$xs', priority: parseFloat(ctx.payload.priority) || 1}),
 }]
 
