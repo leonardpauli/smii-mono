@@ -5,8 +5,51 @@
 
 # plan
 
-- get dataset
+- get dataset tsv export for nordvpn
 	- create mono-repo.basic
+	NEXT:
+	- make manual/local flow to minimise deps
+		- setup /playground/campaign_to_tsv
+			- /playground as typescript project
+			- transfer /fetcher/src/snippets/campaign_import_data
+				- ensure ts utils: json file read + cache save + cached step wrapper
+				- ensure yt api callable
+				- yt api add quota estimator
+				- make http_fetch wrapper to match outline."node types".http_fetch
+					(for later import to db)
+				- ensure neo4j ts connection + utils
+		- fn to report what of campaign (slug, channel, video, uploads playlist) exists in db and not
+			- sideload /fetcher/local/cache for already fetched video stats
+		- fn to report yt fetch plan inc est quota cost
+		- add "last 10 videos with channel promo_code" extractor
+		- add tsv extractor logic from /fetcher/src/snippets/video_yt_fetcher_snippets.js
+			- modify to calculate on local data
+		- extract tsv for existing data, + report on missing rows count
+		- fetch missing data iteratively (to increase row count as fast as possible)
+			- implement fetcher logic, including quota + time estimator
+				- script.1: write what to fetch to file
+					' shouldn't be too bad, considering:
+						1k channels, 1k playlists, (10k videos * iteratively until 20180101)
+						' though with 50 videos per req
+							-> a couple k files will start to take a while to load
+								(though as long as script.1 doesn't take more than an hour or so to run, it should be ok)
+								(will be trivial later on when imported + indexed by db)
+				- script.2: fetch (to http_fetch cache) according to stdin
+				- script.3: parallell batch-invoke script.2 // optional
+			- run
+				on pause, just re-run script.1 to not fetch needlessly
+					(though http_fetch cache will mostly handle that)
+		- re-run extract tsv + reports + send to maya
+		- clean code + make db part optional + wrap in docker
+			thus only requiring:
+				- docker
+				- .env file with yt keys
+				- /data/campaign_data.json
+				- "./docker_start.sh campaign_to_tsv"
+		- add tiny doc
+		- record presentation on how to use
+			+ short about this document (outline) and plan to move back to db + team-proof it
+	- migrate manual script + data to db after "create mono-repo".next
 
 - create mono-repo
 	- basic setup
@@ -14,8 +57,8 @@
 		- commit add project outline (this file) under /note
 		- prepare (api, fetcher, web) by wrapping in folder
 		- force merge into mono
-		NEXT:
 		- fix .gitignore + /local + readme etc
+	_NEXT:
 	- rework exising to fit
 		WIP, doesn't have to work fully, end goal is new system
 		- single .env.local, .env.prod file (see vue)
