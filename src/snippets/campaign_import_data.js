@@ -54,6 +54,13 @@ async function nordvpn_ingest () {
 async function campaign_import_data ({rows, campaign_id}) {
 	// rows is many {url/id/slug, ...campaign_data, posts: [{url/id, ...campaign_data}, ...]}
 
+	await this.neo4j_request_and_log(
+		queries['queue add channels']({xs: '$xs'}), {
+			xs: [{"id": "UCabEkuvQDFVdheax2ObqZYg"}],
+		})
+
+	return
+
 	const rows_cleaned = rows.map(clean_row)
 
 	const channels_all = rows_cleaned.map(({channel, campaign_data})=> ({channel, campaign_data}))
@@ -78,14 +85,29 @@ async function campaign_import_data ({rows, campaign_id}) {
 		posts: posts.slice(0,3),
 	}}, {depth: 4})
 
-	const xs = channels.map(c=> c.channel)
-	console.dir({xs})
-	await this.neo4j_request_and_log(
+	const channels_to_fetch = channels.map(c=> c.channel)
+	// console.dir({channels_to_fetch})
+	false && await this.neo4j_request_and_log(
 		queries['queue add channels unfetched']({xs: '$xs'}), {
+			xs: channels_to_fetch,
+		})
+
+	const xs = channels.slice(0,1)
+	console.dir({xs}, {depth: 5})
+	true && await this.neo4j_request_and_log(
+		queries['channel_add_with_campaign']({
+			xs: '$xs',
+			campaign_id: '$campaign_id',
+		}), {
 			xs,
+			campaign_id,
 		})
 
 	/* TODO:
+	- figure out why some channels doesn't seem to get populated
+		match (q:Queued)--(c:Channel_yt) where q.status = 'done' and c.fetched_at is null optional match (c)--(s:Slug) with * where s is null with * order by q.created_at desc return * // s.id, count(distinct c)
+		- apoc.do.case failes silently?
+
 	- merge channel.channel_data + merge connect w campaign
 	- queue fetch unfetched channel playlist // TODO: later: get latest + older/paginated if needed (check date?)
 		- inc video import overview

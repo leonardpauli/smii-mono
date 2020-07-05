@@ -10,6 +10,7 @@ const {
 const fragment = {
 	
 	neo4j_request (query, params = {}) {
+		// console.dir({query, params, depth: 5})
 		return neo4j_utils.execute_to_objects(this.session, query, params)
 	},
 
@@ -48,15 +49,18 @@ const fragment = {
 		size = 10000,
 		query, // eg. where n.published_at is null set n.published_at = n.publishedAt
 
+		// TODO: add order by n.id (where .id is eg. indexed + string) to get consistent result
+		// better yet; order by native node id?
 		match_query = `match (n:${node_label}) with n`,
 		limit_query = `
 			skip tointeger($i*$size) limit tointeger($size)
 			with collect(n) as ns, count(n) as count_all
 		`,
+		return_query = `return count(n) as count`,
 		perform_query = `
 			${query}
-			return count(n) as count
-		`
+			${return_query}
+		`,
 	}) {
 		let i = i_start
 		
@@ -92,6 +96,7 @@ const fragment = {
 		size = 10000,
 		node_label,
 
+		// TODO: see neo4j_batch_process_all_nodes re order by
 		match_query = `match (n:${node_label}) with n`,
 		limit_query = `
 			limit tointeger($size)

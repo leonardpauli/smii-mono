@@ -12,6 +12,8 @@ const config = {
 	processor_id: process.env.processor_id,
 	queue_poll_delay: 2000,
 	queue_take_count: 5,
+
+	use_snippet: process.env.use_snippet==='true',
 }
 
 module.exports = {config}

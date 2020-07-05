@@ -146,7 +146,7 @@ const fragment = {
 			// console.dir({at: 'import_channel', raw, ctx})
 			throw e
 		}
-
+		console.dir({raw, obj, ctx}, {depth: 8})
 		if (!ctx.q_id) {
 			await this.neo4j_request(`
 				with $channel_raw as channel_raw

@@ -121,9 +121,11 @@ with c_value.c as ${c_var}, ${channel_raw}${with_add}
 const channel_add_with_campaign = ({xs, campaign_id, with_add = ''})=>
 /*
 with [{
-  id: 'UCb1cPPukAdNqMT8dzHRhS5Q',
-  slug: null,
-  meta: {
+  channel: {
+    id: 'UCb1cPPukAdNqMT8dzHRhS5Q',
+    slug: null,
+  },
+  campaign_data: {
     influencer_handle: 'Neurodrome',
     status: 'Live',
     relationship: 'One-off',
@@ -135,9 +137,11 @@ with [{
   }
 },
 {
-  id: null,
-  slug: 'franciscoherrera84',
-  meta: {
+  channel: {
+    id: null,
+    slug: 'franciscoherrera84',
+  },
+  campaign_data: {
     influencer_handle: 'Frankie Tech',
     status: 'Live',
     relationship: 'One-off',
@@ -152,12 +156,12 @@ with [{
 merge (campaign:Campaign {id: ${campaign_id}})
 on create set campaign.created_at = datetime()
 with ${xs} as xs, campaign
-unwind xs as x
+unwind xs as x with campaign, x.channel as channel, x.campaign_data as campaign_data
 
-${channel_merge_match({channel_raw: 'x', with_add: ', campaign'+with_add, c_var: 'c'})}
+${channel_merge_match({channel_raw: 'channel', with_add: ', campaign, campaign_data'+with_add, c_var: 'c'})}
 
 merge (c)<-[:has_node]-(cd:CampaignData)<-[:has_campaign_data]-(campaign)
-set cd += x.meta
+set cd += campaign_data
 
 // return c, cd, campaign
 return count(distinct c), count(distinct cd), count(distinct campaign)
@@ -200,6 +204,7 @@ ${channel_merge_match({channel_raw, with_add, c_var: 'n'})}
 ${mark_empty?`
 set
   n :Channel,
+  n.testing123 = 3331,
   n.fetched_at = case when ${channel_raw}.fetched_at is null then null else datetime(${channel_raw}.fetched_at) end,
   n.empty = true
 `:`
