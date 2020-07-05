@@ -14,6 +14,7 @@
 		- commit add project outline (this file) under /note
 		- prepare (api, fetcher, web) by wrapping in folder
 		- force merge into mono
+		NEXT:
 		- fix .gitignore + /local + readme etc
 	- rework exising to fit
 		WIP, doesn't have to work fully, end goal is new system

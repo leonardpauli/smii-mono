@@ -1,6 +1,1 @@
-local
-node_modules
-.env
-.env.processor_id
-.env.processor_id2
-local
+/local
