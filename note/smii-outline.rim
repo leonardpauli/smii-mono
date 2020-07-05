@@ -1,0 +1,401 @@
+# outline-20200703
+' smii
+	created by Leonard Pauli, 3 jul 2020
+
+
+# plan
+
+- get dataset
+	- create mono-repo.basic
+
+- create mono-repo
+	- basic setup
+		- create new repo: smii-mono#main
+		- commit add project outline (this file) under /note
+		- prepare (api, fetcher, web) by wrapping in folder
+		- force merge into mono
+		- fix .gitignore + /local + readme etc
+	- rework exising to fit
+		WIP, doesn't have to work fully, end goal is new system
+		- single .env.local, .env.prod file (see vue)
+		- /utils with package.json
+		- /api_internal_jun20
+			extract from fetcher + use in fetcher + api (use npm "file://../api_internal_jun20"?)
+		- /api_internal
+			containing actions (mostly fns with db queries; assumes full db access)
+			create from scratch based on outline (this file)
+				potentially use openapi for typescript sdk auto gen?
+		- /playground
+			containing tmp scripts (eg. db refactoring scripts etc)
+		- /data // gitkeep + gitignore contents
+		- /script // start different processes, with and without docker + prod etc
+	- fix new api
+		' use
+			const do_xxx = async (ctx, params)=> {
+				const x = await ctx.neo4j_session_make(async session=> {
+					const query_obj = queries.xxx({...params})
+					const x = await neo4j_json(neo4j_request(session, query_obj))
+					// potentially do more neo4j_request's in same session
+					return x
+				})
+				// potentially do some post-processing
+				return x
+			}
+			const queries = {
+				xxx ({n, b})=> {
+					// fn build the query string + validates + preprocesses params
+					return {
+						query: `return $a + 3 limit ${pos_int(b, {default: 1})}`,
+						params: {a: assert_is_pos_int(n)*2}
+					}
+				},
+			}
+			neo4j_request = (session, query_obj) {
+				if (config.log_neo4j_request) dlog({at: 'neo4j_request', query_obj})
+				// aids debugging when wanting to run a build query in neo4j browser
+				...
+				return ...
+			}
+		- look into openapi + typescript usage
+		// or just base everything on outline (this file)?
+		// at least initially? though openapi/standards are neat
+		// at least for python api client gen
+		- ensure openapi doc/spec
+			- types defined separately
+			- api (external) ref:ing type defs
+				- w http server, def + usage together?
+			- docs + python api client gen for api (external)
+			- api internal actions spec
+				even though it's not rest? sure? how?
+				assume it's rest even though it isn't? typescript?
+		- implement after outline (api internal)
+			- use docker dev env from start
+			- use separate mount point for testing
+				- mock yt_api fetches by commiting cached version of them
+				- use example-flow-with-checkpoints testing
+					// eg. writing a flow starting from empty db through
+					// 	having used all actions/data types in different ways
+					// + add in assertions allong the way
+					// pros: simple to setup, encapsulates a whole flow / the full system
+					// 				/ gives an overview picture of the full system
+					// cons: slower + less isolated than unit tests
+					// clear db on start + run script file
+			- write test-flow (test-driven-development)
+			- implement node type stubs
+			- implement action stubs
+			- implement initial node types + actions + run test
+			- iterate
+			- final test-flow will injest campaign data, fetch, compute, and export tsv
+				full flow, though with subset of campaign data + without queue logic (eg. use direct fetch)
+		- ensure api (external) is using api internal + working correctly
+			- + add python example to use python api client to export tsv for injested campaign
+			- + add js web api client example for channel fuzzy search
+		- add playground script to prefetch data for campaign
+			- from old neo4j db
+			- from already fetched video stats cache
+		- add playground script to export full nordvpn_jun20 campaign tsv for maya to process
+			- inc fetching of missing data
+	- upload mono to github
+	- record demo + share on standup
+	- fix queue
+		- add to test-flow
+		- implement queue aspects
+			- api internal
+			- fetcher
+				- inc quota auto-pause + low prio run when quota is left
+			- api external
+			- web
+				- + serve api docs + playground on web? or not?
+				- rework graph into vue (away from observable.hq blob)
+	- import all data from neo4j_jun20
+		- make playground script + test locally
+		- setup new digital-ocean droplet (with even more memmory from the get-go)
+			- git clone mono
+			- setup .env
+			- run start script
+				- ssl gen
+				- db
+				- api external
+				- fetcher
+				- web
+					- needs nginx proxy for /api: api_external; all else: html5 serve dist
+						later; for now, just use now.sh
+				- periodic db.data backup?
+	- ensure stability
+	- remove neo4j_jun20 (turn off first, schedule remove after 1w of inactivity, potentially make db.data bu)
+	- clean up/remove old code from mono
+	- expand on 
+	- record video of mono; 5 sections:
+		- overview + web (eg. for didrik)
+		- api_external usage (eg. python api client for maya)
+		- local dev + playground + code structure (inc testing) (eg. for rado + gery)
+		- production deploy (eg. for vlad)
+		- discuss future_expansions and hints of how to do it in exising codebase
+
+- future_expansions
+	- using video geo data
+	- mapping spons/brands in all videos
+		- from simple
+			- direct brand mentions
+			- find patterns (eg. sponsored by x)
+			- match found brand names outside pattern to detect more patterns
+		- to more intricate
+			- eg. resolve url_shorteners (eg. spons link hidden behind bitly)
+	- historical data + detecting trends
+		- + wayback-machine? other sources? + own source (/ refetch over time)
+	- comments data (fetching + simple analysing + inc crossovers (eg. commenter is big channel))
+	- topic analysis
+		- from simple (video category) to more intricate (eg. nlp on subtitles or transcribed audio-track)
+	- add more campaigns + start finding patterns
+	- personas + audience overlap, eg. based on global web index + social blade estimates
+	- increase fetcher throughput
+	--
+	- add cool visualizations
+	- instagram fetcher
+	- twitter fetcher
+	- link channels from different medias together
+	- other sources
+	- other processing
+
+inbox:
+	- http_fetch.once is .after_date(date) or boolean
+		ensure all usage of once is compatible
+		eg. channel_id_obj.on fetch{once} is only considering the boolean case atm
+	- channel.fetch how to note empty/missing/removed from yt?
+
+
+# actions
+
+campaign
+	on add with id: ...
+	on add_campaign_data:
+		with
+			- campaign_id
+			- xs is many:
+				channel_id_obj
+				channel.campaign_data
+				posts is many {post_id, post.campaign_data}
+			- post_type_default: video_yt
+				// post doesn't have an index on id (as uniqueness can't be guaranteed)
+				// video_yt has, as its id is unique for yt
+		- channel_id_obj.add + its campaign_data
+		- add node with type post_type_default with post_id to db + its campaign_data
+		- channel_id_obj.fetch{once}
+			' alt:
+				- directly:
+					- worker: single
+					- complexity: low
+					- on error: exit + restart
+						// fetch{once} will skip already fetched entries
+						// + all else is using "upsert"
+				- use queue:
+					- worker: multiple
+					- complexity: higher
+		- channel.has_uploads.playlist.fetch{once}
+		- fetch post details (eg. video stats)
+			- selected: posts |> .fetch{once}
+			- surrounding: surrounding_posts |> .fetch{once}
+				all_latest: channel.has_uploads.playlist.has_video
+				surrounding_posts: channel avg stats: or:
+					- use channel promo_code:
+						all_latest | filter .description has promo_code
+					- use x latest:
+						channel.has_uploads.playlist.has_video | take x latest
+		- compute stats + cache in campaign_data
+			- channel avg using surrounding_posts
+	on extract_tsv:
+		with:
+			- campaign_id
+			- mode is enum(channel_wise, post_wise)
+			- custom fields / stats extractor for campaign_data
+		mode: or:
+			- channel_wise: channel
+				|> compute stats using surrounding_posts + custom stats from their campaign_data
+				|> it + campaign_data
+			- post_wise: selected posts
+				|> compute stats
+				|> it + campaign_data + channel.campaign_data
+
+// later on
+queue:
+	cids is many channel_id_obj
+	on add_channel{once, priority} with cids
+	on add_channel_uploads{once} with cids
+	on add_video{once} with many video_id
+	// once: see http_fetch.once
+	--
+	type is enum(channel, channel_uploads, video)
+	on take_next{worker_id, count, type is many type}
+		// type: eg. list supported by worker
+		// later: potentially store default in db.worker node?
+	on log{queued_id} with log
+	on finished{queued_id} with log?
+		// if log, do log{queued_id} with log first, in same session
+		// eg. if finishing with error
+		// also; log from error?
+	node_types:
+		queued
+			id
+			created_at
+			taken_at
+			finished_at
+			has_worker is worker // if taken_at isn't null
+			has_log is many log
+				// if log.type is error, it probably failed
+
+
+# node types
+
+// from yt api
+slug
+	id
+		example: beneater
+	' channels may change slug
+		slugs may be used with other medias (eg. ig) for different users
+		though act as an id within a media
+channel_yt is channel // channel_yt
+	id
+	has_slug is many slug
+		created_at
+	--
+	has_uploads is playlist
+	has_country is country
+	--
+	has_fetch is many http_fetch
+	on fetch{...opt}:
+		// TODO: how to note empty/missing/removed from yt?
+		do fetch{...opt} of channel_id_obj with or:
+			- has id: {id}
+			- has has_slug: {slug: has_slug.latest}
+video_yt is post
+	id
+	has_fetch is many http_fetch
+		// content may be indirect as well, eg. from playlist fetch
+	on fetch{once}: ...
+		// allows more details (eg. stats) then eg. playlist fetch
+		// always max out results/page (~50?) (quota is per page, not per item in page?)
+		// 	tip: start with 10 latest from each playlist (eg. 10 videos * 5 channels per req = 50 per page)
+		// 	then iteratively fetch more
+playlist
+	id
+	--
+	has_video is many video
+	--
+	has_fetch is many http_fetch
+	on fetch{}
+comment_thread
+	has_fetch is many http_fetch
+comment
+
+country
+	id is iso_country_code_2_letter is string
+
+channel_id_obj
+	id is string?
+	slug is string?
+	from url: ...
+	' used when injesting campaign data
+		profile_link -> channel_id_obj -> channel (existing, empty, or empty with id) ref + slug
+		when fetching, attempt merge
+			slug{e}<-(g:)channel{}
+			slug{a}<-(c:)channel{}
+			slug{b}<-(d:)channel{id,...} // fetched
+			->
+				need to know channel_id_obj used to initiate fetch
+				if it had slug{e}, merge (d) with (g)
+	on add: ...
+		' ensure slug + channel node exists + are connected
+			if slug but no id, and no channels connected to slug,
+			create + connect an empty channel to act as "placeholder"
+	on fetch{once}:
+		// assumes id? + slug? already added to db
+		or channel_id_obj:
+			- has id: or once:
+				- true: skip if fetched else yt_fetch
+					fetched: channel{id}.has_fetch(check db)
+				- else: yt_fetch
+			- has slug: or:
+				- once and fetched: skip;
+					fetched: (slug<-has_slug-)channel.has_fetch(check db)
+				- else:
+					- yt_fetch
+					- create/update channel with id
+					- if has response.slug, create/update + connect it
+					- if response.slug is different from slug:
+						- if slug has empty channel, merge channel nodes
+						- else, connect slug with updated channel node
+
+
+// misc
+post
+	// some properties are same for both yt video and ig post etc
+http_fetch
+	// storage is cheaper than dev time
+	// store all fetch responses before processing
+	// allows multi stage (eg. just fetch first, then redo processing if needed)
+	created_at
+	duration: started_at - created_at
+	base_url
+	query_(...) // flatten query 1 level
+		' eg. {part: [a, b], hl: se, x: {}} ->
+			query_part: [a, b]
+			query_hl: se
+			query_x: JSON.stringify({})
+	status is int
+		example:
+			- 200 // ok
+			- 400 // faulty request
+			- 404 // endpoint missing
+			- 403 // forbidden, eg. quota error
+	has_body is text?
+	// optional
+	quota_cost_est is int
+		// used by yt api fetch planner
+	' on fetch; flag.once:
+		// once: false -> once: after_date now
+		// once: true -> once: after_date -infinity
+		// once: after_date 2w ago // only fetch if no existing or existing is older than 2w
+quota_tracker
+	' using it allows for
+		- key rotation
+		- fetch planner
+			eg. use up quota just before reset by ramping
+				up fetch speed for low prio queued)
+		- simplified fetcher setup
+			// only needs db access
+	api_key is string
+	has_fetch is many http_fetch
+	quota_limit is int
+		example: 10k
+	reset_date: ... // yt resets quota at ~9am swedish time? check it
+	// no way to get current usage? check it
+	quota_taken is int:
+		be has_fetch.target{created_at > reset_date}.quota_cost_est | sum
+	quota_left: quota_limit - quota_taken
+worker
+	id
+	has_log is many log
+log
+	created_at
+	type is enum(info, warn, error)
+	at is string // where in code as dot path
+		// TODO: slash path/uri is more standard, though dot is nicer to write, rim: allow for isomorphic-view/representation-options
+	...(misc data | json minus array flattened 1 level deep)
+
+
+
+// from brand
+campaign
+	id
+		example: nordvpn_jun20
+	has_channel is many channel.campaign_data
+	has_post is many post.campaign_data
+campaign_data
+	...misc
+	for (post, channel):
+		has_campaign_data is many self
+brand
+	id
+		example: nordvpn
+	has_campaign is many campaign
+
