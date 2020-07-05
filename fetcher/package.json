@@ -1,0 +1,17 @@
+{
+  "name": "smii-fetcher-20200610",
+  "version": "0.1.0",
+  "description": "social-media-influencer-insights fetcher for yt",
+  "main": "src/main.js",
+  "dependencies": {
+    "@leonardpauli/utils": "github:leonardpauli/js-utils#jun2020",
+    "neo4j-driver": "^4.0.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "load_env": "echo 'manually run source .env'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Leonard Pauli",
+  "license": "UNLICENCED"
+}
